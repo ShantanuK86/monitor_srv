@@ -120,6 +120,7 @@ class Azure(Service):
         try:
             r = requests.get(self.status_url, headers=self.headers, timeout=5)
             b = BeautifulSoup(r.content, 'html.parser')
+            print(r.text)
             # Azure changes layout often, searching for keywords in main container
             text = r.text.lower()
             if 'fewer than 3' in text or 'good' in text: # Specific to some azure parsers
