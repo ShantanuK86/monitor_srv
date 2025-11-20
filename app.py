@@ -82,14 +82,51 @@ class StatusPagePlugin(Service):
 # ==========================================
 
 class Atlassian(StatusPagePlugin):
-    name = 'Atlassian'
-    status_url = 'https://status.atlassian.com/'
+    name = 'Atlassian Jira'
+    status_url = 'https://jira-software.status.atlassian.com/'
     icon = "fab fa-jira"
 
 class Cloudflare(StatusPagePlugin):
     name = 'Cloudflare'
     status_url = 'https://www.cloudflarestatus.com/'
     icon = "fab fa-cloudflare"
+
+
+
+class Confluence(Service):
+    name = "Atlassian Confluence"
+    status_url = "https://confluence.status.atlassian.com/api/v2/status.json"
+    components_url = "https://confluence.status.atlassian.com/api/v2/components.json"
+    icon = "fab fa-confluence"
+
+    def get_status(self):
+        try:
+            r = requests.get(self.status_url, timeout=5)
+            status_data = r.json()
+            indicator = status_data.get("indicator", "").lower()
+            
+            # Map the indicator to your Status enum
+            if indicator == "none":
+                return Status.ok
+            if indicator == "minor":
+                return Status.minor
+            if indicator in ["major", "critical"]:
+                return Status.critical
+
+            # Fallback: check components
+            cr = requests.get(self.components_url, timeout=5)
+            comps = cr.json().get("components", [])
+            for c in comps:
+                st = c.get("status", "")
+                if st in ["major_outage", "partial_outage"]:
+                    return Status.critical
+                if st == "degraded_performance":
+                    return Status.minor
+
+            return Status.ok
+        except Exception:
+            return Status.unavailable
+
 
 class AWS(Service):
     name = 'Amazon Web Services'
@@ -99,7 +136,7 @@ class AWS(Service):
     def get_status(self):
         try:
             r = requests.get(self.status_url, headers=self.headers, timeout=5)
-            if "Service is operating normally" in r.text or "status0.gif" in r.text:
+            if "Service is operating normally" in r.text or "status0.gif" in r.text or "No recent issues" in r.text:
                 return Status.ok
             elif "status1.gif" in r.text: # Informational
                 return Status.ok
@@ -112,29 +149,29 @@ class AWS(Service):
             return Status.unavailable
 
 class Azure(Service):
-    name = 'Microsoft Azure'
-    status_url = 'https://azure.microsoft.com/en-us/status/'
+    name = "Microsoft Azure"
+    status_url = "https://azure.status.microsoft/en-us/status"
     icon = "fab fa-microsoft"
 
     def get_status(self):
         try:
-            r = requests.get(self.status_url, headers=self.headers, timeout=5)
-            b = BeautifulSoup(r.content, 'html.parser')
-            print(r.text)
-            # Azure changes layout often, searching for keywords in main container
-            text = r.text.lower()
-            if 'fewer than 3' in text or 'good' in text: # Specific to some azure parsers
+            r = requests.get(self.status_url, timeout=5)
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            text = soup.get_text(" ", strip=True).lower()
+
+            if "all services are healthy" in text or "no active events" in text:
                 return Status.ok
-            
-            # Fallback to prompt logic
-            div = str(b.select_one('.section'))
-            if 'health-warning' in div:
+            if "degradation" in text or "service advisory" in text:
                 return Status.minor
-            elif 'health-error' in div:
+            if "outage" in text or "unavailable" in text:
                 return Status.critical
+
             return Status.ok
+
         except:
             return Status.unavailable
+
 
 class GCloud(Service):
     name = 'Google Cloud'
@@ -270,6 +307,7 @@ SERVICES = [
     Slack(),
     Docker(),
     GitHub(),
+    Confluence(),
 ]
 
 def check_single_service(service):
