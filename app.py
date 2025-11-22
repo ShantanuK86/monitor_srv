@@ -2,10 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 from enum import Enum
 import concurrent.futures
-from flask import Flask, render_template, abort
+from flask import Flask, render_template, abort, send_file
 import time
 import random
 from datetime import datetime, timedelta
+import pandas as pd
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -293,6 +295,62 @@ def service_detail(name):
         stats=stats,
         Status=Status
     )
+
+
+
+@app.route('/download_report')
+def download_report():
+    # 1. Fetch current status data (re-run checks to ensure report is live)
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
+        for future in concurrent.futures.as_completed(future_to_service):
+            results.append(future.result())
+    
+    # Sort for consistency
+    results.sort(key=lambda x: x['name'])
+
+    # 2. Prepare data for Excel
+    data = []
+    report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    for r in results:
+        # Convert Enum status to readable string
+        status_name = r['status'].name.upper() if r['status'] else "UNKNOWN"
+        data.append({
+            "Service Name": r['name'],
+            "Status URL": r['url'],
+            "Current Status": status_name,
+            "Report Timestamp": report_time
+        })
+
+    # 3. Create DataFrame
+    df = pd.DataFrame(data)
+
+    # 4. Write to BytesIO buffer
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Status Report')
+        
+        # Optional: Auto-adjust column width (basic approximation)
+        worksheet = writer.sheets['Status Report']
+        for idx, col in enumerate(df.columns):
+            # Calculate max length of column + header
+            max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = max_len
+
+    output.seek(0)
+    
+    # 5. Generate filename
+    filename = f"Status_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    
+    return send_file(
+        output,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
