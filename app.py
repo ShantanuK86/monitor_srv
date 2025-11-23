@@ -27,6 +27,17 @@ class Service(object):
     def __init__(self):
         # Fake user agent to prevent 403 Forbidden errors
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        # Store response time history (in ms)
+        self.history = []
+        self.last_checked = None
+
+    def add_history(self, latency_ms):
+        """Add a new response time to history and maintain max size"""
+        self.history.append(latency_ms)
+        self.last_checked = datetime.now()
+        # Keep only last 30 data points
+        if len(self.history) > 30:
+            self.history.pop(0)
 
     @property
     def name(self):
@@ -48,25 +59,27 @@ class Service(object):
     def get_status(self):
         raise NotImplementedError()
 
-    # --- New Method: Generate Mock History Data for the Dashboard ---
+    # --- Real History Data for Dashboard ---
     def get_detailed_stats(self):
-        """
-        Since we don't have a database, we simulate historical data 
-        to populate the dashboard UI requested.
-        """
-        # 1. Mock Response Times (last 30 points)
-        response_times = [random.randint(20, 150) for _ in range(30)]
-        # Add a random spike
-        response_times[random.randint(0, 29)] = random.randint(300, 800)
+        # Use actual history data
+        data = self.history if self.history else [0]
         
-        # 2. Mock Uptime Stats
-        uptime_7d = 100.0 if random.random() > 0.2 else 99.8
+        # Calculate real stats
+        avg_resp = round(sum(data) / len(data), 2)
+        min_resp = min(data)
+        max_resp = max(data)
+
+        # Mock Uptime Stats (Persistent long-term data requires DB)
+        uptime_7d = 100.0 if random.random() > 0.1 else 99.8
         uptime_30d = 99.99
         uptime_365d = 99.95
-
-        # 3. Mock Incidents
+        
+        # Format last check time
+        last_check_str = self.last_checked.strftime("%H:%M:%S") if self.last_checked else "Just now"
+        
+        # Mock Incidents (Requires persistent storage for real implementation)
         incidents = []
-        if random.random() > 0.7:
+        if random.random() > 0.8:
              incidents.append({
                  "status": "Resolved",
                  "cause": "High Latency in US-East",
@@ -75,16 +88,17 @@ class Service(object):
              })
         
         return {
-            "response_times": response_times,
-            "avg_response": round(sum(response_times) / len(response_times), 2),
-            "min_response": min(response_times),
-            "max_response": max(response_times),
+            "response_times": data,
+            "avg_response": avg_resp,
+            "min_response": min_resp,
+            "max_response": max_resp,
             "uptime_7d": uptime_7d,
             "uptime_30d": uptime_30d,
             "uptime_365d": uptime_365d,
-            "last_check": "26 seconds ago",
+            "last_check": last_check_str,
             "incidents": incidents
         }
+        
 
 class StatusPagePlugin(Service):
     """Generic plugin for Atlassian StatusPage based sites"""
@@ -256,12 +270,28 @@ SERVICES = [
 SERVICE_MAP = {s.name: s for s in SERVICES}
 
 def check_single_service(service):
-    """Helper to run in thread"""
+    """
+    Runs the check, measures latency, and updates history.
+    Returns the status dictionary for the UI.
+    """
+    start_time = time.time()
+    
+    # 1. Perform the actual network request
+    status = service.get_status()
+    
+    end_time = time.time()
+    
+    # 2. Calculate latency in milliseconds
+    latency_ms = int((end_time - start_time) * 1000)
+    
+    # 3. Save to memory
+    service.add_history(latency_ms)
+    
     return {
         'name': service.name,
         'url': service.status_url,
         'icon': service.icon,
-        'status': service.get_status()
+        'status': status
     }
 
 @app.route('/')
@@ -283,9 +313,10 @@ def service_detail(name):
         abort(404)
     
     # Get real-time status
-    current_status = service.get_status()
+    live_data = check_single_service(service)
+    current_status = live_data['status']
     
-    # Get mock data for dashboard visualization
+    # Now fetch the stats which includes the history we just updated
     stats = service.get_detailed_stats()
     
     return render_template(

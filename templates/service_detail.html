@@ -13,10 +13,19 @@
                 extend: {
                     colors: {
                         dark: {
-                            900: '#111827',
-                            800: '#1F2937',
-                            700: '#374151',
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
                         }
+                    },
+                    keyframes: {
+                        progress: {
+                            '0%': { width: '0%' },
+                            '100%': { width: '100%' },
+                        }
+                    },
+                    animation: {
+                        progress: 'progress 60s linear infinite',
                     }
                 }
             }
@@ -29,39 +38,43 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
         .card { background-color: #1e293b; border-radius: 0.5rem; border: 1px solid #334155; }
+        
+        /* Custom scrollbar for iframe usage */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body class="min-h-screen p-6">
 
     <div class="max-w-6xl mx-auto space-y-6">
         
-        <!-- Breadcrumb -->
-        <a href="/" class="text-gray-400 hover:text-white flex items-center gap-2 mb-4 text-sm">
+        <!-- Breadcrumb: Only shown if NOT in iframe -->
+        <a href="/" id="backLink" class="text-gray-400 hover:text-white flex items-center gap-2 mb-4 text-sm">
             <i class="fas fa-arrow-left"></i> Back to Dashboard
         </a>
 
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <div class="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center border border-gray-700">
+                <div class="w-16 h-16 rounded-full bg-dark-800 flex items-center justify-center border border-dark-700 shadow-lg">
                     <i class="{{ service.icon }} text-4xl text-gray-400"></i>
                 </div>
                 <div>
-                    <h1 class="text-3xl font-bold text-white">{{ service.name }}</h1>
+                    <h1 class="text-3xl font-bold text-white tracking-tight">{{ service.name }}</h1>
                     <div class="flex items-center gap-2 mt-1">
-                        <span class="text-gray-400 text-sm">HTTP/S monitor for {{ service.status_url }}</span>
-                    </div>
-                    <div class="flex gap-2 mt-2">
-                        <span class="px-2 py-0.5 bg-gray-800 text-gray-300 text-xs rounded border border-gray-700">Client 1</span>
-                        <span class="px-2 py-0.5 bg-gray-800 text-gray-300 text-xs rounded border border-gray-700">Server US-East</span>
+                        <span class="text-gray-400 text-sm flex items-center gap-2">
+                            <i class="fas fa-globe text-xs"></i> {{ service.status_url }}
+                        </span>
                     </div>
                 </div>
             </div>
             
-            <!-- Big Status Indicator -->
+            <!-- Dynamic Status Indicator -->
             <div class="text-right">
                 {% if status.name == 'ok' %}
-                    <div class="px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 font-bold flex items-center gap-2">
+                    <div class="px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 font-bold flex items-center gap-2 shadow-inner shadow-green-900/20">
                         <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                         OPERATIONAL
                     </div>
@@ -69,9 +82,21 @@
                     <div class="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-400 font-bold flex items-center gap-2">
                         <i class="fas fa-tools"></i> MAINTENANCE
                     </div>
+                {% elif status.name == 'minor' %}
+                    <div class="px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 font-bold flex items-center gap-2">
+                        <i class="fas fa-exclamation-triangle"></i> MINOR ISSUE
+                    </div>
+                {% elif status.name == 'major' %}
+                    <div class="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-orange-400 font-bold flex items-center gap-2 animate-pulse">
+                        <i class="fas fa-exclamation-circle"></i> MAJOR OUTAGE
+                    </div>
+                {% elif status.name == 'critical' %}
+                    <div class="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 font-bold flex items-center gap-2 animate-pulse">
+                        <i class="fas fa-times-circle"></i> CRITICAL
+                    </div>
                 {% else %}
-                    <div class="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 font-bold flex items-center gap-2">
-                        <i class="fas fa-exclamation-triangle"></i> OUTAGE
+                    <div class="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-gray-300 font-bold flex items-center gap-2">
+                        <i class="fas fa-question-circle"></i> UNKNOWN
                     </div>
                 {% endif %}
             </div>
@@ -79,126 +104,157 @@
 
         <!-- Top Stats Row -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Current Status -->
-            <div class="card p-6">
-                <p class="text-gray-400 text-sm mb-1">Current status</p>
+            <!-- Current Status Card -->
+            <div class="card p-6 relative overflow-hidden group transition-all hover:border-gray-500">
+                <div class="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <i class="fas fa-heartbeat text-6xl"></i>
+                </div>
+                <p class="text-gray-400 text-sm mb-1 font-medium">Current Status</p>
                 {% if status.name == 'ok' %}
-                    <p class="text-2xl font-bold text-green-400">Up</p>
-                    <p class="text-xs text-gray-500 mt-1">Currently up for 5 d, 14 h, 5 m</p>
+                    <p class="text-3xl font-bold text-green-400">UP</p>
+                    <p class="text-xs text-gray-500 mt-2">Service is reachable</p>
                 {% else %}
-                    <p class="text-2xl font-bold text-red-400">Down</p>
-                    <p class="text-xs text-gray-500 mt-1">Started 12 mins ago</p>
+                    <p class="text-3xl font-bold text-red-400 uppercase">{{ status.name }}</p>
+                    <p class="text-xs text-gray-500 mt-2">Service is experiencing issues</p>
                 {% endif %}
             </div>
 
-            <!-- Last Check -->
+            <!-- Last Check Card -->
             <div class="card p-6">
-                <p class="text-gray-400 text-sm mb-1">Last check</p>
-                <p class="text-2xl font-bold text-white">{{ stats.last_check }}</p>
-                <p class="text-xs text-gray-500 mt-1">Checked every 60s</p>
+                <p class="text-gray-400 text-sm mb-1 font-medium">Last Check</p>
+                <p class="text-3xl font-bold text-white">{{ stats.last_check }}</p>
+                <!-- Animated Progress Bar -->
+                <div class="w-full bg-dark-700 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-blue-500 h-full rounded-full w-full animate-progress origin-left"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Refreshing automatically in 120s</p>
             </div>
 
-            <!-- Last 24 Hours Bar (Fake Visualization) -->
+            <!-- Response History Bar -->
             <div class="card p-6">
-                <p class="text-gray-400 text-sm mb-1">Last 24 hours</p>
-                <div class="flex gap-[2px] mt-2 h-8 items-end">
-                    <!-- Generating fake bars -->
-                    {% for i in range(30) %}
-                        <div class="flex-1 bg-green-500 rounded-sm opacity-80 hover:opacity-100 transition" style="height: {{ range(40, 100) | random }}%"></div>
-                    {% endfor %}
+                <p class="text-gray-400 text-sm mb-1 font-medium">Latency History (Last 30)</p>
+                <div class="flex gap-[3px] mt-3 h-10 items-end">
+                    {% if stats.response_times %}
+                        {% set max_val = stats.max_response if stats.max_response > 0 else 1 %}
+                        {% for val in stats.response_times %}
+                            {% set height = (val / max_val * 100) %}
+                            <!-- Dynamic Color based on Latency -->
+                            {% set color_class = 'bg-green-500' %}
+                            {% if val > 500 %}
+                                {% set color_class = 'bg-red-500' %}
+                            {% elif val > 200 %}
+                                {% set color_class = 'bg-yellow-500' %}
+                            {% endif %}
+                            
+                            <div class="flex-1 {{ color_class }} rounded-sm hover:opacity-80 transition cursor-help min-h-[2px]" 
+                                 style="height: {{ height }}%"
+                                 title="{{ val }} ms"></div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-xs text-gray-500">No data yet...</p>
+                    {% endif %}
                 </div>
-                <p class="text-xs text-gray-500 mt-1">0 incidents, 0 m down</p>
+                <div class="flex justify-between mt-1 text-xs text-gray-500">
+                    <span>Older</span>
+                    <span>Now</span>
+                </div>
             </div>
         </div>
 
         <!-- Uptime Stats Row -->
-        <div class="card p-6 grid grid-cols-1 md:grid-cols-4 gap-6 divide-x divide-gray-700">
-            <div class="px-4 first:pl-0">
-                <p class="font-bold text-white mb-4">Uptime stats.</p>
+        <div class="card p-6 grid grid-cols-1 md:grid-cols-4 gap-6 divide-y md:divide-y-0 md:divide-x divide-dark-700">
+            <div class="px-4 first:pl-0 pt-4 md:pt-0">
+                <p class="font-bold text-white mb-2 text-lg">Uptime Stats</p>
+                <p class="text-xs text-gray-400">Estimated availability based on checks.</p>
             </div>
-            <div class="px-4">
-                <p class="text-gray-400 text-xs">Last 7 days</p>
-                <p class="text-2xl font-bold text-green-400">{{ stats.uptime_7d }}%</p>
-                <p class="text-xs text-gray-500">0 incidents</p>
+            <div class="px-4 pt-4 md:pt-0">
+                <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Last 7 days</p>
+                <p class="text-2xl font-bold text-green-400 mt-1">{{ stats.uptime_7d }}%</p>
+                <p class="text-xs text-gray-500 mt-1"><i class="fas fa-check-circle text-green-500/50"></i> Target met</p>
             </div>
-            <div class="px-4">
-                <p class="text-gray-400 text-xs">Last 30 days</p>
-                <p class="text-2xl font-bold text-green-400">{{ stats.uptime_30d }}%</p>
-                <p class="text-xs text-gray-500">1 incident, 12 m down</p>
+            <div class="px-4 pt-4 md:pt-0">
+                <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Last 30 days</p>
+                <p class="text-2xl font-bold text-green-400 mt-1">{{ stats.uptime_30d }}%</p>
+                <p class="text-xs text-gray-500 mt-1">Stable</p>
             </div>
-            <div class="px-4 flex justify-between items-center">
-                <div>
-                    <p class="text-gray-400 text-xs">Last 365 days</p>
-                    <p class="text-2xl font-bold text-white">{{ stats.uptime_365d }}%</p>
-                    <p class="text-xs text-gray-500">- incidents</p>
-                </div>
+            <div class="px-4 pt-4 md:pt-0">
+                <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Last 365 days</p>
+                <p class="text-2xl font-bold text-white mt-1">{{ stats.uptime_365d }}%</p>
+                <span class="text-xs text-blue-400 mt-1 block opacity-70 cursor-not-allowed">Download Report</span>
             </div>
         </div>
 
         <!-- Response Time Graph -->
         <div class="card p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-white">Response time</h3>
-                <span class="text-xs bg-gray-800 px-2 py-1 rounded text-gray-300">Last 30 Checks</span>
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-white">Response Time</h3>
+                    <p class="text-xs text-gray-400">Real-time latency in milliseconds (ms)</p>
+                </div>
+                <span class="text-xs bg-dark-700 border border-dark-700 px-3 py-1 rounded-full text-gray-300">Last 30 Checks</span>
             </div>
             
             <div class="h-64 w-full">
-                <canvas id="responseChart"></canvas>
+                <!-- Data Attribute binding for JS -->
+                <canvas id="responseChart" data-chart='{{ stats.response_times | tojson }}'></canvas>
             </div>
 
-            <div class="grid grid-cols-3 gap-4 mt-6 border-t border-gray-700 pt-4">
-                <div>
-                    <div class="flex items-center gap-2 text-gray-400 text-xs mb-1">
+            <div class="grid grid-cols-3 gap-4 mt-6 border-t border-dark-700 pt-6">
+                <div class="text-center md:text-left">
+                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
                         <i class="fas fa-wave-square"></i> Average
                     </div>
-                    <p class="text-xl font-bold text-white">{{ stats.avg_response }} ms</p>
+                    <p class="text-2xl font-bold text-white">{{ stats.avg_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2 text-gray-400 text-xs mb-1">
+                <div class="text-center md:text-left">
+                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
                         <i class="fas fa-arrow-down text-green-400"></i> Minimum
                     </div>
-                    <p class="text-xl font-bold text-white">{{ stats.min_response }} ms</p>
+                    <p class="text-2xl font-bold text-white">{{ stats.min_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
                 </div>
-                <div>
-                    <div class="flex items-center gap-2 text-gray-400 text-xs mb-1">
+                <div class="text-center md:text-left">
+                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
                         <i class="fas fa-arrow-up text-red-400"></i> Maximum
                     </div>
-                    <p class="text-xl font-bold text-white">{{ stats.max_response }} ms</p>
+                    <p class="text-2xl font-bold text-white">{{ stats.max_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
                 </div>
             </div>
         </div>
 
         <!-- Latest Incidents -->
         <div class="card p-6">
-            <h3 class="text-lg font-bold text-white mb-4">Latest incidents</h3>
-            <div class="overflow-x-auto">
+            <h3 class="text-lg font-bold text-white mb-4">Latest Incidents</h3>
+            <div class="overflow-x-auto rounded-lg border border-dark-700">
                 <table class="w-full text-left text-sm text-gray-400">
-                    <thead class="bg-gray-800 text-xs uppercase font-medium">
+                    <thead class="bg-dark-900 text-xs uppercase font-medium text-gray-500">
                         <tr>
-                            <th class="px-4 py-3 rounded-l-md">Status</th>
-                            <th class="px-4 py-3">Root cause</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Description</th>
                             <th class="px-4 py-3">Started</th>
-                            <th class="px-4 py-3 rounded-r-md text-right">Duration</th>
+                            <th class="px-4 py-3 text-right">Duration</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-700">
+                    <tbody class="divide-y divide-dark-700 bg-dark-800">
                         {% if stats.incidents %}
                             {% for incident in stats.incidents %}
-                            <tr>
+                            <tr class="hover:bg-dark-700/50 transition-colors">
                                 <td class="px-4 py-4">
-                                    <span class="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs border border-green-500/20">
+                                    <span class="px-2 py-1 bg-green-500/10 text-green-400 rounded-md text-xs border border-green-500/20 font-bold uppercase">
                                         {{ incident.status }}
                                     </span>
                                 </td>
-                                <td class="px-4 py-4 text-white">{{ incident.cause }}</td>
+                                <td class="px-4 py-4 text-gray-200 font-medium">{{ incident.cause }}</td>
                                 <td class="px-4 py-4">{{ incident.started }}</td>
                                 <td class="px-4 py-4 text-right">{{ incident.duration }}</td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="4" class="px-4 py-8 text-center text-gray-600 italic">
-                                    No recent incidents reported.
+                                <td colspan="4" class="px-4 py-12 text-center text-gray-500">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <i class="fas fa-shield-alt text-4xl text-dark-700"></i>
+                                        <span>No incidents reported recently.</span>
+                                    </div>
                                 </td>
                             </tr>
                         {% endif %}
@@ -211,12 +267,23 @@
 
     <!-- Chart Config -->
     <script>
-        const ctx = document.getElementById('responseChart').getContext('2d');
+        // Hide Back button if inside iframe
+        if (window.self !== window.top) {
+            const backLink = document.getElementById('backLink');
+            if (backLink) backLink.style.display = 'none';
+        }
+
+        const canvas = document.getElementById('responseChart');
+        const ctx = canvas.getContext('2d');
+        
+        // Read data safely
+        const rawData = canvas.getAttribute('data-chart');
+        const responseData = rawData ? JSON.parse(rawData) : [0];
+        
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.2)'); // Greenish
+        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.4)'); // Greenish
         gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
 
-        const responseData = {{ stats.response_times | tojson }};
         const labels = Array.from({length: responseData.length}, (_, i) => i + 1);
 
         new Chart(ctx, {
@@ -226,13 +293,14 @@
                 datasets: [{
                     label: 'Response Time (ms)',
                     data: responseData,
-                    borderColor: '#22c55e', // Tailwind green-500
+                    borderColor: '#22c55e',
                     backgroundColor: gradient,
                     borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#fff',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.3
                 }]
             },
             options: {
@@ -243,18 +311,25 @@
                     tooltip: {
                         mode: 'index',
                         intersect: false,
-                        backgroundColor: '#1f2937',
+                        backgroundColor: '#0f172a',
                         titleColor: '#fff',
                         bodyColor: '#cbd5e1',
-                        borderColor: '#374151',
-                        borderWidth: 1
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y + ' ms';
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: { display: false },
                     y: {
-                        grid: { color: '#374151' },
-                        ticks: { color: '#9ca3af' },
+                        grid: { color: '#334155', drawBorder: false },
+                        ticks: { color: '#94a3b8', font: { size: 10 } },
                         beginAtZero: true
                     }
                 },
@@ -262,6 +337,10 @@
                     mode: 'nearest',
                     axis: 'x',
                     intersect: false
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeOutQuart'
                 }
             }
         });
