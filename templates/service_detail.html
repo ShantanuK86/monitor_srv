@@ -65,7 +65,13 @@
                     <h1 class="text-3xl font-bold text-white tracking-tight">{{ service.name }}</h1>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="text-gray-400 text-sm flex items-center gap-2">
-                            <i class="fas fa-globe text-xs"></i> {{ service.status_url }}
+                            <i class="fas fa-globe text-xs"></i>
+                            <a href="{{ service.status_url }}" 
+                            class="text-blue-500 hover:underline"
+                            target="_blank"
+                            rel="noopener noreferrer">
+                                {{ service.status_url }}
+                            </a>
                         </span>
                     </div>
                 </div>
