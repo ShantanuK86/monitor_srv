@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from enum import Enum
 import concurrent.futures
-from flask import Flask, render_template, abort, send_file
+from flask import Flask, render_template, abort, send_file,request, jsonify
 import time
 import random
 from datetime import datetime, timedelta
@@ -350,6 +350,62 @@ def download_report():
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+
+@app.route('/get_report_text')
+def get_report_text():
+    """Generates a table-formatted text summary for the clipboard"""
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
+        for future in concurrent.futures.as_completed(future_to_service):
+            results.append(future.result())
+    
+    results.sort(key=lambda x: x['name'])
+    
+    report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Prepare data for formatting
+    rows = []
+    for r in results:
+        status_enum = r['status']
+        status_str = status_enum.name.upper() if status_enum else "UNKNOWN"
+        rows.append({
+            "name": r['name'],
+            "status": status_str,
+            "time": report_time
+        })
+
+    # Calculate max column widths
+    if rows:
+        max_name = max(len(r["name"]) for r in rows)
+        max_status = max(len(r["status"]) for r in rows)
+    else:
+        max_name = 10
+        max_status = 10
+        
+    # Add padding
+    w_name = max(len("Service Name"), max_name) + 5
+    w_status = max(len("Status"), max_status) + 5
+    
+    # Build Table Lines
+    lines = []
+    
+    # Header Row
+    header = f"{'Service Name'.ljust(w_name)}{'Status'.ljust(w_status)}Timestamp"
+    lines.append(header)
+    lines.append("-" * len(header))
+    
+    # Data Rows
+    for row in rows:
+        line = f"{row['name'].ljust(w_name)}{row['status'].ljust(w_status)}{row['time']}"
+        lines.append(line)
+    
+    return jsonify({
+        "body": "\n".join(lines)
+    })
+
+
 
 
 if __name__ == '__main__':
