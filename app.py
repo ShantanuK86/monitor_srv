@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from enum import Enum
 import concurrent.futures
-from flask import Flask, render_template, abort, send_file,request, jsonify
+from flask import Flask, render_template, abort, send_file, request, jsonify
 import time
 import random
 from datetime import datetime, timedelta
@@ -77,7 +77,7 @@ class Service(object):
         # Format last check time
         last_check_str = self.last_checked.strftime("%H:%M:%S") if self.last_checked else "Just now"
         
-        # Mock Incidents (Requires persistent storage for real implementation)
+        # Mock Incidents
         incidents = []
         if random.random() > 0.8:
              incidents.append({
@@ -86,6 +86,57 @@ class Service(object):
                  "started": (datetime.now() - timedelta(days=2)).strftime("%b %d, %H:%M"),
                  "duration": "14m"
              })
+
+        # --- Generate Mock Components based on Service Name ---
+        components = []
+        component_map = {
+            'Amazon Web Services': [
+                'Amazon Elastic Compute Cloud (EC2)', 
+                'Amazon Chime', 
+                'Amazon CloudFront', 
+                'Amazon Elastic Container Registry Public', 
+                'AWS Billing Console',
+                'Amazon Simple Storage Service (S3)',
+                'AWS Lambda'
+            ],
+            'Google Cloud': [
+                'Google Compute Engine',
+                'Google App Engine',
+                'Google Cloud Storage', 
+                'Google Kubernetes Engine',
+                'Google BigQuery',
+                'Google Cloud Functions',
+                'Google Cloud Pub/Sub'
+            ],
+            'Microsoft Azure': [
+                'Azure Virtual Machines',
+                'Azure App Service', 
+                'Azure SQL Database', 
+                'Azure Blob Storage', 
+                'Azure Active Directory',
+                'Azure DevOps',
+                'Azure Cosmos DB'
+            ],
+            'GitHub': ['Git Operations', 'API Requests', 'Webhooks', 'Issues', 'Pull Requests', 'Actions'],
+            'Atlassian': ['Jira Software', 'Confluence', 'Bitbucket', 'Trello', 'StatusPage'],
+            'Slack': ['Messaging', 'Calls', 'File Uploads', 'Notifications', 'Search', 'Login/SSO'],
+            'Docker': ['Docker Hub', 'Docker Desktop', 'Image Registry', 'Authentication'],
+            'Cloudflare': ['CDN', 'DNS', 'Edge Workers', 'API', 'WAF']
+        }
+
+        # Get relevant components or default ones
+        names = component_map.get(self.name, ['API', 'Web Dashboard', 'Database', 'Third-party Integrations'])
+        
+        for comp_name in names:
+            # Mostly OK, small chance of issue
+            status = "Operational"
+            if random.random() > 0.95:
+                status = "Partial Outage" if random.random() > 0.5 else "Maintenance"
+            
+            components.append({
+                "name": comp_name,
+                "status": status
+            })
         
         return {
             "response_times": data,
@@ -96,9 +147,9 @@ class Service(object):
             "uptime_30d": uptime_30d,
             "uptime_365d": uptime_365d,
             "last_check": last_check_str,
-            "incidents": incidents
+            "incidents": incidents,
+            "components": components  # <--- Added components list
         }
-        
 
 class StatusPagePlugin(Service):
     """Generic plugin for Atlassian StatusPage based sites"""
@@ -294,51 +345,15 @@ def check_single_service(service):
         'status': status
     }
 
-@app.route('/')
-def index():
+def generate_excel_file():
+    """Helper to generate the Excel file buffer"""
+    # 1. Fetch current status data (this triggers latency updates too)
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
         for future in concurrent.futures.as_completed(future_to_service):
             results.append(future.result())
     
-    results.sort(key=lambda x: x['name'])
-    return render_template('index.html', services=results, Status=Status)
-
-@app.route('/service/<name>')
-def service_detail(name):
-    # Find the service object
-    service = SERVICE_MAP.get(name)
-    if not service:
-        abort(404)
-    
-    # Get real-time status
-    live_data = check_single_service(service)
-    current_status = live_data['status']
-    
-    # Now fetch the stats which includes the history we just updated
-    stats = service.get_detailed_stats()
-    
-    return render_template(
-        'service_detail.html', 
-        service=service, 
-        status=current_status,
-        stats=stats,
-        Status=Status
-    )
-
-
-
-@app.route('/download_report')
-def download_report():
-    # 1. Fetch current status data (re-run checks to ensure report is live)
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
-        for future in concurrent.futures.as_completed(future_to_service):
-            results.append(future.result())
-    
-    # Sort for consistency
     results.sort(key=lambda x: x['name'])
 
     # 2. Prepare data for Excel
@@ -346,7 +361,6 @@ def download_report():
     report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     for r in results:
-        # Convert Enum status to readable string
         status_name = r['status'].name.upper() if r['status'] else "UNKNOWN"
         data.append({
             "Service Name": r['name'],
@@ -362,26 +376,59 @@ def download_report():
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Status Report')
-        
-        # Optional: Auto-adjust column width (basic approximation)
         worksheet = writer.sheets['Status Report']
         for idx, col in enumerate(df.columns):
-            # Calculate max length of column + header
             max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = max_len
 
     output.seek(0)
-    
-    # 5. Generate filename
     filename = f"Status_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     
+    return output, filename
+
+@app.route('/')
+def index():
+    results = []
+    # This loop refreshes all services and updates their history every time index loads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
+        for future in concurrent.futures.as_completed(future_to_service):
+            results.append(future.result())
+    
+    results.sort(key=lambda x: x['name'])
+    return render_template('index.html', services=results, Status=Status)
+
+@app.route('/service/<name>')
+def service_detail(name):
+    service = SERVICE_MAP.get(name)
+    if not service:
+        abort(404)
+    
+    # Perform a live check when opening the details to get the very latest point
+    # We re-use check_single_service so latency is recorded
+    live_data = check_single_service(service)
+    current_status = live_data['status']
+    
+    # Now fetch the stats which includes the history we just updated
+    stats = service.get_detailed_stats()
+    
+    return render_template(
+        'service_detail.html', 
+        service=service, 
+        status=current_status,
+        stats=stats,
+        Status=Status
+    )
+
+@app.route('/download_report')
+def download_report():
+    output, filename = generate_excel_file()
     return send_file(
         output,
         download_name=filename,
         as_attachment=True,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-
 
 @app.route('/get_report_text')
 def get_report_text():
@@ -435,9 +482,6 @@ def get_report_text():
     return jsonify({
         "body": "\n".join(lines)
     })
-
-
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
