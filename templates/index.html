@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Auto-refresh page every 60 seconds for real-time updates -->
-    <meta http-equiv="refresh" content="120">
+    <!-- Note: Static meta refresh removed in favor of dynamic JS refresh -->
     
     <title>isServiceUp</title>
     <!-- Tailwind CSS (Dark Mode) -->
@@ -61,6 +60,39 @@
                 <i class="fas fa-check text-xl"></i>
             </div>
             <h1 class="text-3xl font-bold tracking-tight text-white">isServiceUp</h1>
+        </div>
+
+        <!-- Issue Counter Logic -->
+        {% set ns = namespace(issues=0) %}
+        {% for service in services %}
+            {% if service.status.name not in ['ok', 'maintenance'] %}
+                {% set ns.issues = ns.issues + 1 %}
+            {% endif %}
+        {% endfor %}
+
+        <!-- Global Status Alert (Hidden if 0 issues) -->
+        {% if ns.issues > 0 %}
+        <div class="mb-6 w-full bg-red-900/20 border border-red-500/30 rounded-lg p-4 flex items-center justify-center text-red-300 font-semibold shadow-lg backdrop-blur-sm animate-pulse">
+            <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
+            <span>Experiencing issues with {{ ns.issues }} service{{ 's' if ns.issues > 1 else '' }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Monitor Count & Auto Refresh Toolbar -->
+        <div class="flex items-center justify-between w-full mb-3 px-1">
+            <div class="text-gray-400 font-semibold text-sm">
+                {{ services|length }} monitors
+            </div>
+            <div class="relative group">
+                <select id="refreshSelect" onchange="updateRefreshInterval()" class="appearance-none bg-dark-800 border border-dark-700 hover:border-dark-700/80 text-gray-300 py-1.5 pl-3 pr-8 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm cursor-pointer transition-colors">
+                    <option value="0">Auto refresh off</option>
+                    <option value="120">2 minutes</option>
+                    <option value="900">15 minutes</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400 group-hover:text-white transition-colors">
+                    <i class="fas fa-chevron-down text-xs"></i>
+                </div>
+            </div>
         </div>
 
         <!-- Service Card Container -->
@@ -132,7 +164,7 @@
                     <i class="fas fa-copy"></i> Copy Draft
                 </button>
             </div>
-            <span class="text-xs text-gray-600">Auto-refreshes every 2 minutes</span>
+            <div id="refreshStatus" class="text-xs text-gray-600">Auto-refresh disabled</div>
         </div>
 
     </div>
@@ -140,19 +172,15 @@
     <!-- Modal Popup -->
     <div id="serviceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div class="modal-content w-full max-w-6xl h-[90vh] bg-dark-900 rounded-xl shadow-2xl border border-dark-700 flex flex-col relative overflow-hidden">
-            
-            <!-- Close Button -->
             <button onclick="closeModal()" class="absolute top-4 right-6 z-50 text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
                 <i class="fas fa-times"></i>
             </button>
-
-            <!-- Iframe for Dashboard Content -->
             <iframe id="modalIframe" src="" class="w-full h-full border-0" title="Service Details"></iframe>
-            
         </div>
     </div>
 
     <script>
+        // Modal Logic
         const modal = document.getElementById('serviceModal');
         const iframe = document.getElementById('modalIframe');
 
@@ -164,31 +192,17 @@
 
         function closeModal() {
             modal.classList.remove('active');
-            setTimeout(() => {
-                iframe.src = '';
-            }, 300);
+            setTimeout(() => { iframe.src = ''; }, 300);
             document.body.style.overflow = 'auto';
         }
 
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeModal();
-            }
-        });
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.classList.contains('active')) {
-                closeModal();
-            }
-        });
-
-
-        // Copy Text Draft Functionality
+        // Copy Text Draft
         async function copyReportDraft() {
             const btn = document.getElementById('copyBtn');
             const originalHTML = btn.innerHTML;
-            
-            // Loading State
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -196,7 +210,6 @@
             try {
                 const response = await fetch('/get_report_text');
                 const data = await response.json();
-                
                 if (data.body) {
                     await navigator.clipboard.writeText(data.body);
                     btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
@@ -207,13 +220,49 @@
                     }, 2000);
                 }
             } catch (error) {
-                alert("Failed to copy report. Please try again.");
+                alert("Failed to copy report.");
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
 
+        // --- Auto Refresh Logic ---
+        let refreshTimer;
+
+        function updateRefreshInterval() {
+            const select = document.getElementById('refreshSelect');
+            const statusText = document.getElementById('refreshStatus');
+            const intervalSeconds = parseInt(select.value);
+            
+            // Save preference
+            localStorage.setItem('refreshInterval', intervalSeconds);
+            
+            // Clear existing
+            if (refreshTimer) clearInterval(refreshTimer);
+
+            if (intervalSeconds > 0) {
+                statusText.innerText = `Auto-refreshes every ${intervalSeconds} seconds`;
+                refreshTimer = setInterval(() => {
+                    // Only reload if user isn't viewing the modal
+                    if (!modal.classList.contains('active')) {
+                        window.location.reload();
+                    }
+                }, intervalSeconds * 1000);
+            } else {
+                statusText.innerText = "Auto-refresh disabled";
+            }
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('refreshInterval');
+            const select = document.getElementById('refreshSelect');
+            if (saved !== null) {
+                select.value = saved;
+            }
+            updateRefreshInterval(); // Apply setting
+        });
     </script>
 
 </body>
