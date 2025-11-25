@@ -8,8 +8,12 @@ import random
 from datetime import datetime, timedelta
 import pandas as pd
 from io import BytesIO
+import threading
 
 app = Flask(__name__)
+
+# Global storage for the daily report
+DAILY_LOG = []
 
 # ==========================================
 # 1. MODELS & CLASSES
@@ -245,7 +249,7 @@ def check_single_service(service):
         'icon': service.icon,
         'status': status,
         'incident': incident_data,
-        'history': service.history  # Added for sparklines
+        'history': service.history
     }
 
 def generate_excel_file():
@@ -272,6 +276,61 @@ def generate_excel_file():
     filename = f"Status_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return output, filename
 
+# ==========================================
+# BACKGROUND SCHEDULER FOR DAILY REPORT
+# ==========================================
+def background_scheduler():
+    """Runs every 15 minutes to snapshot all services."""
+    print("Background Scheduler Started...")
+    while True:
+        now = datetime.now()
+        
+        # Reset log at midnight
+        if now.hour == 0 and now.minute < 15 and len(DAILY_LOG) > 90:
+            DAILY_LOG.clear()
+            print("Daily Log Reset for new day.")
+
+        # Calculate seconds until next 15 minute interval
+        # Intervals: 00, 15, 30, 45
+        next_minute = (now.minute // 15 + 1) * 15
+        if next_minute == 60:
+            next_time = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        else:
+            next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        
+        delay = (next_time - now).total_seconds()
+        time.sleep(delay)
+        
+        # --- Run Checks ---
+        print(f"Running Scheduled Check at {datetime.now().strftime('%H:%M:%S')}")
+        snapshot = {
+            "timestamp": datetime.now().strftime("%H:%M"),
+            "services": {}
+        }
+        
+        # We don't use ThreadPool here to avoid race conditions with the main app pool, 
+        # and speed isn't critical for background task
+        for service in SERVICES:
+            try:
+                # Direct check, not updating 'history' to keep UI sparklines separate if needed, 
+                # but checking 'get_status' triggers a real request.
+                # To strictly follow 'not affected by page reloading', we do a fresh check.
+                status = service.get_status()
+                snapshot["services"][service.name] = status.name.upper()
+            except:
+                snapshot["services"][service.name] = "UNKNOWN"
+        
+        DAILY_LOG.append(snapshot)
+        # Sleep a bit to avoid double execution in the same second
+        time.sleep(2)
+
+# Start the background thread
+threading.Thread(target=background_scheduler, daemon=True).start()
+
+# ==========================================
+# FLASK ROUTES
+# ==========================================
+
 @app.route('/')
 def index():
     results = []
@@ -290,8 +349,6 @@ def monitoring():
         for future in concurrent.futures.as_completed(future_to_service):
             results.append(future.result())
     
-    # Sorting Priority: Critical(5) > Major(4) > Minor(3) > Unavailable(6) > Maintenance(2) > OK(1)
-    # We map them to an sort index for easier sorting
     sort_map = {
         Status.critical: 0,
         Status.major: 1,
@@ -300,14 +357,10 @@ def monitoring():
         Status.maintenance: 4,
         Status.ok: 5
     }
-    
     results.sort(key=lambda x: (sort_map.get(x['status'], 6), x['name']))
-    
-    # KPI Stats
     total = len(results)
     running = sum(1 for r in results if r['status'] == Status.ok)
-    issues = total - running # Includes maintenance as "not fully running" for KPI purposes
-    
+    issues = total - running
     return render_template('monitoring.html', services=results, Status=Status, total=total, running=running, issues=issues)
 
 @app.route('/service/<name>')
@@ -320,6 +373,40 @@ def service_detail(name):
 @app.route('/download_report')
 def download_report():
     output, filename = generate_excel_file()
+    return send_file(output, download_name=filename, as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.route('/download_daily_report')
+def download_daily_report():
+    """Generates Excel from the background DAILY_LOG"""
+    if not DAILY_LOG:
+        # Return empty or error if no data yet
+        return "No daily data collected yet. Please wait for the next 15-minute interval.", 404
+
+    # Transform Data for DataFrame
+    # Goal: Rows = 12:00, 12:15... | Cols = Service Names
+    
+    # 1. Extract unique timestamps and service names
+    data = []
+    for entry in DAILY_LOG:
+        row = {"Time": entry["timestamp"]}
+        row.update(entry["services"])
+        data.append(row)
+        
+    df = pd.DataFrame(data)
+    
+    # Write to Excel
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Daily 24h Report')
+        worksheet = writer.sheets['Daily 24h Report']
+        # Auto-width
+        for idx, col in enumerate(df.columns):
+            max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = max_len
+
+    output.seek(0)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    filename = f"Daily_Report_{date_str}.xlsx"
     return send_file(output, download_name=filename, as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/get_report_text')
