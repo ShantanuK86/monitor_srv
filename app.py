@@ -68,22 +68,63 @@ class Service(object):
                  "duration": "14m"
              })
 
+        # --- Generate Mock Nested Components ---
         components = []
-        component_map = {
-            'Amazon Web Services': ['Amazon Elastic Compute Cloud (EC2)', 'Amazon Chime', 'Amazon CloudFront', 'Amazon Elastic Container Registry Public', 'AWS Billing Console', 'Amazon Simple Storage Service (S3)', 'AWS Lambda'],
-            'Google Cloud': ['Google Compute Engine', 'Google App Engine', 'Google Cloud Storage', 'Google Kubernetes Engine', 'Google BigQuery', 'Google Cloud Functions', 'Google Cloud Pub/Sub'],
-            'Microsoft Azure': ['Azure Virtual Machines', 'Azure App Service', 'Azure SQL Database', 'Azure Blob Storage', 'Azure Active Directory', 'Azure DevOps', 'Azure Cosmos DB'],
-            'GitHub': ['Git Operations', 'API Requests', 'Webhooks', 'Issues', 'Pull Requests', 'Actions'],
-            'Atlassian': ['Jira Software', 'Confluence', 'Bitbucket', 'Trello', 'StatusPage'],
-            'Slack': ['Messaging', 'Calls', 'File Uploads', 'Notifications', 'Search', 'Login/SSO'],
-            'Docker': ['Docker Hub', 'Docker Desktop', 'Image Registry', 'Authentication'],
-            'Cloudflare': ['CDN', 'DNS', 'Edge Workers', 'API', 'WAF']
+        
+        # Define structure with optional sub-components
+        service_structure = {
+            'Amazon Web Services': [
+                {'name': 'Elastic Compute Cloud (EC2)', 'subs': ['Region: us-east-1', 'Region: eu-west-1', 'API Endpoint', 'Management Console']},
+                {'name': 'Simple Storage Service (S3)', 'subs': ['Standard Storage', 'Glacier', 'Transfer Acceleration']},
+                {'name': 'RDS', 'subs': ['MySQL', 'PostgreSQL', 'Aurora']},
+                {'name': 'CloudFront', 'subs': []},
+                {'name': 'Route 53', 'subs': ['DNS Queries', 'Health Checks', 'Domain Registration']}
+            ],
+            'Google Cloud': [
+                {'name': 'Compute Engine', 'subs': ['VM Instances', 'Disks', 'Images']},
+                {'name': 'Cloud Storage', 'subs': ['Multi-Regional', 'Regional', 'Nearline']},
+                {'name': 'Kubernetes Engine', 'subs': ['Cluster Management', 'API Server']}
+            ],
+            'Microsoft Azure': [
+                {'name': 'Virtual Machines', 'subs': ['Windows VMs', 'Linux VMs']},
+                {'name': 'Azure SQL Database', 'subs': ['Database Engine', 'Connectivity']},
+                {'name': 'Blob Storage', 'subs': []}
+            ],
+            'Atlassian': [
+                {'name': 'Jira Software', 'subs': ['Issue Tracking', 'Boards', 'Backlog']},
+                {'name': 'Confluence', 'subs': ['Pages', 'Editor', 'Comments']},
+                {'name': 'Bitbucket', 'subs': ['Git over HTTPS', 'Git over SSH', 'Pull Requests']}
+            ]
         }
-        names = component_map.get(self.name, ['API', 'Web Dashboard', 'Database', 'Third-party Integrations'])
-        for comp_name in names:
-            status = "Operational"
-            if random.random() > 0.95: status = "Partial Outage" if random.random() > 0.5 else "Maintenance"
-            components.append({"name": comp_name, "status": status})
+
+        # Default for others
+        defaults = [{'name': 'API', 'subs': []}, {'name': 'Dashboard', 'subs': []}, {'name': 'Database', 'subs': ['Read Replicas', 'Write Master']}]
+        
+        structure = service_structure.get(self.name, defaults)
+        
+        for item in structure:
+            # Parent Status
+            p_status = "Operational"
+            if random.random() > 0.95: p_status = "Maintenance"
+            
+            children = []
+            for sub_name in item['subs']:
+                c_status = "Operational"
+                if p_status != "Operational": 
+                    c_status = p_status # Inherit issues
+                elif random.random() > 0.98: 
+                    c_status = "Partial Outage"
+                
+                children.append({
+                    "name": sub_name,
+                    "status": c_status
+                })
+            
+            components.append({
+                "name": item['name'],
+                "status": p_status,
+                "children": children
+            })
         
         return {
             "response_times": data,

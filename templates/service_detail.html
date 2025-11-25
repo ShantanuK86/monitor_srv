@@ -39,6 +39,75 @@
         body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
         .card { background-color: #1e293b; border-radius: 0.5rem; border: 1px solid #334155; }
         
+        /* Tree View Styles */
+        .component-row {
+            border-bottom: 1px solid #334155;
+        }
+        .component-row:last-child {
+            border-bottom: none;
+        }
+        .component-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .component-content:hover {
+            background-color: #334155;
+        }
+        .sub-components {
+            display: none;
+            background-color: #0f172a;
+            border-top: 1px solid #334155;
+        }
+        .sub-components.open {
+            display: block;
+        }
+        .sub-row {
+            padding: 0.5rem 1rem 0.5rem 2.5rem; /* Indentation */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1e293b;
+            position: relative;
+        }
+        .sub-row:last-child {
+            border-bottom: none;
+        }
+        .sub-row::before {
+            content: '';
+            position: absolute;
+            left: 1.2rem;
+            top: 0;
+            bottom: 50%;
+            width: 10px;
+            border-left: 1px solid #64748b;
+            border-bottom: 1px solid #64748b;
+        }
+        .chevron {
+            transition: transform 0.2s;
+            margin-right: 0.5rem;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        .component-content.active .chevron {
+            transform: rotate(90deg);
+        }
+        .status-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.1rem 0.5rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .status-ok { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2); }
+        .status-warn { background: rgba(234, 179, 8, 0.1); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.2); }
+        .status-err { background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); }
+        
         /* Custom scrollbar for iframe usage */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
@@ -50,7 +119,7 @@
 
     <div class="max-w-6xl mx-auto space-y-6">
         
-        <!-- Breadcrumb: Only shown if NOT in iframe -->
+        <!-- Breadcrumb -->
         <a href="/" id="backLink" class="text-gray-400 hover:text-white flex items-center gap-2 mb-4 text-sm">
             <i class="fas fa-arrow-left"></i> Back to Dashboard
         </a>
@@ -104,7 +173,6 @@
 
         <!-- Top Stats Row -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Current Status Card -->
             <div class="card p-6 relative overflow-hidden group transition-all hover:border-gray-500">
                 <div class="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <i class="fas fa-heartbeat text-6xl"></i>
@@ -119,18 +187,15 @@
                 {% endif %}
             </div>
 
-            <!-- Last Check Card -->
             <div class="card p-6">
                 <p class="text-gray-400 text-sm mb-1 font-medium">Last Check</p>
                 <p class="text-3xl font-bold text-white">{{ stats.last_check }}</p>
-                <!-- Animated Progress Bar -->
                 <div class="w-full bg-dark-700 h-1.5 rounded-full mt-3 overflow-hidden">
                     <div class="bg-blue-500 h-full rounded-full w-full animate-progress origin-left"></div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Refreshing automatically in 60s</p>
             </div>
 
-            <!-- Response History Bar -->
             <div class="card p-6">
                 <p class="text-gray-400 text-sm mb-1 font-medium">Latency History (Last 30)</p>
                 <div class="flex gap-[3px] mt-3 h-10 items-end">
@@ -138,7 +203,6 @@
                         {% set max_val = stats.max_response if stats.max_response > 0 else 1 %}
                         {% for val in stats.response_times %}
                             {% set height = (val / max_val * 100) %}
-                            <!-- Dynamic Color based on Latency -->
                             {% set color_class = 'bg-green-500' %}
                             {% if val > 500 %}
                                 {% set color_class = 'bg-red-500' %}
@@ -184,70 +248,58 @@
             </div>
         </div>
 
-        <!-- Response Time Graph -->
-        <div class="card p-6">
-            <div class="flex justify-between items-center mb-6">
-                <div>
-                    <h3 class="text-lg font-bold text-white">Response Time</h3>
-                    <p class="text-xs text-gray-400">Real-time latency in milliseconds (ms)</p>
-                </div>
-                <span class="text-xs bg-dark-700 border border-dark-700 px-3 py-1 rounded-full text-gray-300">Last 30 Checks</span>
-            </div>
-            
-            <div class="h-64 w-full">
-                <!-- Data Attribute binding for JS -->
-                <canvas id="responseChart" data-chart='{{ stats.response_times | tojson }}'></canvas>
-            </div>
-
-            <div class="grid grid-cols-3 gap-4 mt-6 border-t border-dark-700 pt-6">
-                <div class="text-center md:text-left">
-                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
-                        <i class="fas fa-wave-square"></i> Average
-                    </div>
-                    <p class="text-2xl font-bold text-white">{{ stats.avg_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
-                </div>
-                <div class="text-center md:text-left">
-                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
-                        <i class="fas fa-arrow-down text-green-400"></i> Minimum
-                    </div>
-                    <p class="text-2xl font-bold text-white">{{ stats.min_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
-                </div>
-                <div class="text-center md:text-left">
-                    <div class="flex items-center justify-center md:justify-start gap-2 text-gray-400 text-xs mb-1 uppercase tracking-wide">
-                        <i class="fas fa-arrow-up text-red-400"></i> Maximum
-                    </div>
-                    <p class="text-2xl font-bold text-white">{{ stats.max_response }} <span class="text-sm font-normal text-gray-500">ms</span></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Components List (NEW SECTION) -->
+        <!-- Components List (TREE VIEW) -->
         <div class="card p-6">
             <div class="flex items-center justify-between mb-4 border-b border-dark-700 pb-2">
-                <h3 class="text-lg font-bold text-white">Components</h3>
-                <span class="text-xs text-gray-400">{{ stats.components|length }} total</span>
+                <div class="flex gap-4">
+                    <h3 class="text-lg font-bold text-white border-b-2 border-white pb-2">Components</h3>
+                    <h3 class="text-lg font-medium text-gray-500 pb-2 cursor-not-allowed">History</h3>
+                </div>
             </div>
             
-            <div class="space-y-2">
+            <div class="border border-dark-700 rounded overflow-hidden">
                 {% if stats.components %}
                     {% for component in stats.components %}
-                    <div class="flex items-center justify-between p-3 bg-dark-900 rounded border border-dark-700/50 hover:border-dark-700 transition-colors">
-                        <span class="text-gray-300 font-medium">{{ component.name }}</span>
-                        
-                        {% if component.status == 'Operational' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-green-500/10 text-green-400 border border-green-500/20">
-                                <i class="fas fa-check-circle mr-1.5"></i> Up
-                            </span>
-                        {% elif component.status == 'Maintenance' %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                <i class="fas fa-tools mr-1.5"></i> Maintenance
-                            </span>
-                        {% else %}
-                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                                <i class="fas fa-exclamation-circle mr-1.5"></i> Issue
-                            </span>
-                        {% endif %}
-                    </div>
+                        <!-- Parent Component -->
+                        <div class="component-row">
+                            <div class="component-content" onclick="toggleSubComponents(this)">
+                                <div class="flex items-center">
+                                    {% if component.children %}
+                                        <i class="fas fa-chevron-right chevron"></i>
+                                    {% else %}
+                                        <span class="w-4 mr-2"></span>
+                                    {% endif %}
+                                    <span class="text-gray-300 font-medium">{{ component.name }}</span>
+                                </div>
+                                
+                                {% if component.status == 'Operational' %}
+                                    <div class="status-badge status-ok"><i class="fas fa-check-circle"></i> Up</div>
+                                {% elif component.status == 'Maintenance' %}
+                                    <div class="status-badge status-warn"><i class="fas fa-tools"></i> Maint</div>
+                                {% else %}
+                                     <div class="status-badge status-err"><i class="fas fa-exclamation-circle"></i> Issue</div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Children Components -->
+                            {% if component.children %}
+                            <div class="sub-components">
+                                {% for child in component.children %}
+                                <div class="sub-row">
+                                    <span class="text-gray-400 text-sm">{{ child.name }}</span>
+                                    
+                                    {% if child.status == 'Operational' %}
+                                        <div class="status-badge status-ok"><i class="fas fa-check-circle"></i> Up</div>
+                                    {% elif child.status == 'Maintenance' %}
+                                        <div class="status-badge status-warn"><i class="fas fa-tools"></i> Maint</div>
+                                    {% else %}
+                                         <div class="status-badge status-err"><i class="fas fa-exclamation-circle"></i> Issue</div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
                     {% endfor %}
                 {% else %}
                     <div class="text-center py-4 text-gray-500 italic">No component details available</div>
@@ -255,8 +307,22 @@
             </div>
         </div>
 
-        <!-- Latest Incidents -->
-        <div class="card p-6">
+        <!-- Response Time Graph -->
+        <div class="card p-6 mt-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-white">Response Time</h3>
+                    <p class="text-xs text-gray-400">Real-time latency in milliseconds (ms)</p>
+                </div>
+                <span class="text-xs bg-dark-700 border border-dark-700 px-3 py-1 rounded-full text-gray-300">Last 30 Checks</span>
+            </div>
+            <div class="h-64 w-full">
+                <canvas id="responseChart" data-chart='{{ stats.response_times | tojson }}'></canvas>
+            </div>
+        </div>
+
+        <!-- Latest Incidents (Restored) -->
+        <div class="card p-6 mt-6">
             <h3 class="text-lg font-bold text-white mb-4">Latest Incidents</h3>
             <div class="overflow-x-auto rounded-lg border border-dark-700">
                 <table class="w-full text-left text-sm text-gray-400">
@@ -299,25 +365,32 @@
 
     </div>
 
-    <!-- Chart Config -->
+    <!-- Scripts -->
     <script>
+        // Toggle Tree View
+        function toggleSubComponents(element) {
+            const row = element.parentElement;
+            const subContainer = row.querySelector('.sub-components');
+            if (subContainer) {
+                subContainer.classList.toggle('open');
+                element.classList.toggle('active');
+            }
+        }
+
         // Hide Back button if inside iframe
         if (window.self !== window.top) {
             const backLink = document.getElementById('backLink');
             if (backLink) backLink.style.display = 'none';
         }
 
+        // Chart Setup
         const canvas = document.getElementById('responseChart');
         const ctx = canvas.getContext('2d');
-        
-        // Read data safely
         const rawData = canvas.getAttribute('data-chart');
         const responseData = rawData ? JSON.parse(rawData) : [0];
-        
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.4)'); // Greenish
+        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.4)');
         gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
-
         const labels = Array.from({length: responseData.length}, (_, i) => i + 1);
 
         new Chart(ctx, {
@@ -350,13 +423,7 @@
                         bodyColor: '#cbd5e1',
                         borderColor: '#334155',
                         borderWidth: 1,
-                        padding: 10,
-                        displayColors: false,
-                        callbacks: {
-                            label: function(context) {
-                                return context.parsed.y + ' ms';
-                            }
-                        }
+                        displayColors: false
                     }
                 },
                 scales: {
@@ -366,15 +433,6 @@
                         ticks: { color: '#94a3b8', font: { size: 10 } },
                         beginAtZero: true
                     }
-                },
-                interaction: {
-                    mode: 'nearest',
-                    axis: 'x',
-                    intersect: false
-                },
-                animation: {
-                    duration: 1000,
-                    easing: 'easeOutQuart'
                 }
             }
         });
