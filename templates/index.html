@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
     <title>isServiceUp</title>
-    <!-- Tailwind CSS (Dark Mode) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,75 +11,53 @@
             theme: {
                 extend: {
                     colors: {
-                        dark: {
-                            900: '#0f172a', // Slate 900
-                            800: '#1e293b', // Slate 800
-                            700: '#334155', // Slate 700
-                        }
+                        dark: { 900: '#0d1117', 800: '#161b22', 700: '#21262d', 600: '#30363d' },
+                        warn: { 900: '#3b2300', 500: '#e3b341', border: '#6e501a' },
+                        success: { 900: 'rgba(46, 160, 67, 0.15)', 500: '#3fb950', border: 'rgba(46, 160, 67, 0.4)' }
                     }
                 }
             }
         }
     </script>
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        
-        /* Modal Animation */
-        .modal {
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        .modal.active {
-            opacity: 1;
-            visibility: visible;
-        }
-        .modal-content {
-            transform: scale(0.95);
-            transition: transform 0.3s ease;
-        }
-        .modal.active .modal-content {
-            transform: scale(1);
-        }
+        .modal { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal.active { opacity: 1; visibility: visible; }
+        .modal-content { transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal.active .modal-content { transform: scale(1); }
+        #incidentDropdown { transition: max-height 0.3s ease-in-out; max-height: 0; overflow: hidden; }
+        #incidentDropdown.open { max-height: 2000px; }
+        .custom-select-wrapper { position: relative; display: inline-block; }
+        .custom-select-trigger { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; color: #c9d1d9; background: #161b22; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; transition: all 0.2s; min-width: 160px; }
+        .custom-select-trigger:hover { border-color: #8b949e; }
+        .custom-options { position: absolute; display: none; top: 100%; left: 0; right: 0; background: #161b22; border: 1px solid #30363d; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 50; margin-top: 4px; }
+        .custom-options.open { display: block; }
+        .custom-option { padding: 0.5rem 1rem; font-size: 0.875rem; color: #c9d1d9; cursor: pointer; transition: background 0.2s; }
+        .custom-option:hover { background: #21262d; color: #fff; }
+        .custom-option.selected { background: #21262d; color: #58a6ff; }
     </style>
 </head>
-<!-- Added pt-24 to push content down below fixed navbar -->
-<body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col items-center pt-24 pb-10">
+<body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col items-center pt-24 pb-10 px-4">
 
-    <!-- FIXED NAVBAR -->
-    <nav class="fixed top-0 left-0 w-full bg-dark-900/90 backdrop-blur-md border-b border-dark-700 z-40 transition-all duration-300">
+    <nav class="fixed top-0 left-0 w-full bg-dark-900/95 backdrop-blur-md border-b border-dark-700 z-40">
         <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-            
-            <!-- Left: Branding -->
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full border-2 border-green-500 flex items-center justify-center text-green-500 bg-green-500/10">
-                    <i class="fas fa-check text-sm"></i>
-                </div>
+                <div class="w-8 h-8 rounded-full border-2 border-green-500 flex items-center justify-center text-green-500 bg-green-500/10"><i class="fas fa-check text-sm"></i></div>
                 <div class="flex flex-col">
                     <h1 class="text-lg font-bold tracking-tight text-white leading-tight">isServiceUp</h1>
                     <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">IT Department</span>
                 </div>
             </div>
-
-            <!-- Right: Labels -->
             <div class="flex items-center gap-1">
-                <a href="#" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">
-                    Services
-                </a>
-                <a href="#" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">
-                    24*7 Monitoring
-                </a>
+                <a href="/" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">Services</a>
+                <a href="/monitoring" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">24*7 Monitoring</a>
             </div>
-
         </div>
     </nav>
 
-    <div class="w-full max-w-4xl px-4">
-        
-        <!-- Issue Counter Logic -->
+    <div class="w-full max-w-5xl">
         {% set ns = namespace(issues=0) %}
         {% for service in services %}
             {% if service.status.name not in ['ok', 'maintenance'] %}
@@ -89,143 +65,139 @@
             {% endif %}
         {% endfor %}
 
-        <!-- Global Status Alert (Hidden if 0 issues) -->
         {% if ns.issues > 0 %}
-        <div class="mb-6 w-full bg-red-900/20 border border-red-500/30 rounded-lg p-4 flex items-center justify-center text-red-300 font-semibold shadow-lg backdrop-blur-sm animate-pulse">
-            <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
-            <span>Experiencing issues with {{ ns.issues }} service{{ 's' if ns.issues > 1 else '' }}</span>
-        </div>
+            <div class="mb-8 w-full rounded border border-warn-border bg-dark-900 overflow-hidden">
+                <button onclick="toggleIncidents()" class="w-full bg-warn-900 py-3 px-4 flex items-center justify-center text-warn-500 font-bold hover:bg-warn-900/80 transition-colors group border-b border-warn-border">
+                    <i class="fas fa-caret-down mr-3 transform transition-transform -rotate-90" id="incidentChevron"></i>
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span>Experiencing issues with {{ ns.issues }} service{{ 's' if ns.issues > 1 else '' }}</span>
+                </button>
+                <div id="incidentDropdown" class="bg-dark-900">
+                    <div class="p-6 space-y-8">
+                        {% for service in services %}
+                            {% if service.status.name not in ['ok', 'maintenance'] and service.incident %}
+                            <div class="border-b border-dark-700 pb-6 last:border-0 last:pb-0">
+                                <h3 class="text-white font-bold text-md underline decoration-gray-600 underline-offset-4 mb-3">{{ service.incident.title }}</h3>
+                                <div class="flex flex-wrap items-center gap-2 mb-3">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-[#2e1a05] text-[#e3b341] border border-[#6e501a] text-xs font-bold"><i class="fas fa-exclamation-triangle mr-1.5 text-[10px]"></i> Warn</span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-[#0d1b2e] text-[#58a6ff] border border-[#1f3a5e] text-xs font-bold"><i class="{{ service.icon }} mr-1.5 text-[10px]"></i> {{ service.name }} <span class="ml-1 text-[#e3b341]">•</span></span>
+                                </div>
+                                <p class="text-sm text-gray-400 leading-relaxed mb-2">{{ service.incident.description }}</p>
+                                <div class="text-xs text-gray-500">{{ service.incident.timestamp }}</div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="mb-8 w-full rounded border border-success-border bg-success-900 p-4 flex items-center justify-center text-success-500 font-bold shadow-sm">
+                <i class="fas fa-check-circle mr-2 text-lg"></i>
+                <span>All systems are operational. No incidents reported.</span>
+            </div>
         {% endif %}
 
-        <!-- Monitor Count & Auto Refresh Toolbar -->
-        <div class="flex items-center justify-between w-full mb-3 px-1">
-            <div class="text-gray-400 font-semibold text-sm">
-                {{ services|length }} monitors
-            </div>
-            <div class="relative group">
-                <select id="refreshSelect" onchange="updateRefreshInterval()" class="appearance-none bg-dark-800 border border-dark-700 hover:border-dark-700/80 text-gray-300 py-1.5 pl-3 pr-8 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm cursor-pointer transition-colors">
-                    <option value="0">Auto refresh off</option>
-                    <option value="120">2 minutes</option>
-                    <option value="900">15 minutes</option>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400 group-hover:text-white transition-colors">
-                    <i class="fas fa-chevron-down text-xs"></i>
+        <div class="flex items-center justify-between w-full mb-2 px-1 pb-2 border-b border-dark-700/0">
+            <h2 class="text-white font-bold text-lg">{{ services|length }} Services</h2>
+            <div class="flex items-center gap-3">
+                <div class="custom-select-wrapper">
+                    <div class="custom-select-trigger" onclick="toggleSelect()">
+                        <span id="selectValue">Auto refresh off</span>
+                        <i class="fas fa-chevron-down text-xs text-gray-500 ml-2"></i>
+                    </div>
+                    <div class="custom-options">
+                        <div class="custom-option selected" data-value="0" onclick="setRefresh(0, 'Auto refresh off')">Auto refresh off</div>
+                        <div class="custom-option" data-value="120" onclick="setRefresh(120, 'Refresh: 2 min')">Refresh: 2 min</div>
+                        <div class="custom-option" data-value="900" onclick="setRefresh(900, 'Refresh: 15 min')">Refresh: 15 min</div>
+                    </div>
+                </div>
+                <div class="flex border border-dark-700 rounded overflow-hidden">
+                    <button class="px-2 py-1 bg-dark-800 text-green-500 border-r border-dark-700"><i class="fas fa-list"></i></button>
+                    <button class="px-2 py-1 bg-dark-900 text-gray-500 border-r border-dark-700"><i class="fas fa-pause"></i></button>
+                    <button class="px-2 py-1 bg-dark-900 text-gray-500"><i class="fas fa-grip-horizontal"></i></button>
                 </div>
             </div>
         </div>
 
-        <!-- Service Card Container -->
-        <div class="bg-dark-800 shadow-xl border border-dark-700 rounded-lg overflow-hidden">
-            
+        <div class="bg-dark-900 border-t border-dark-700">
             {% for service in services %}
-            <div onclick="openModal('{{ service.name }}')" class="relative flex items-center justify-between p-5 border-b border-dark-700 last:border-0 hover:bg-dark-700/50 transition-colors cursor-pointer group">
-                
-                <!-- Left: Icon & Name -->
+            <div onclick="openModal('{{ service.name }}')" class="relative flex items-center justify-between py-3 px-4 border-b border-dark-700 hover:bg-dark-800/50 transition-colors cursor-pointer group">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-dark-900 border border-dark-700 flex items-center justify-center text-gray-400">
-                        <i class="{{ service.icon }} text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-white text-lg group-hover:text-blue-400 transition-colors">{{ service.name }}</h3>
-                        <div class="flex items-center gap-2 text-sm text-gray-500">
-                            <span>{{ service.url }}</span>
-                            <i class="fas fa-external-link-alt text-xs opacity-0 group-hover:opacity-100 transition-opacity"></i>
-                        </div>
+                    <i class="fas fa-caret-right text-gray-600 text-xs"></i>
+                    <div class="w-8 h-8 rounded bg-dark-800 border border-dark-700 flex items-center justify-center text-gray-400 group-hover:text-white transition-colors"><i class="{{ service.icon }}"></i></div>
+                    <div class="flex flex-col">
+                        <h3 class="font-bold text-gray-300 text-sm group-hover:text-blue-400 transition-colors">{{ service.name }}</h3>
+                        <span class="text-xs text-gray-500">{{ service.url }}</span>
                     </div>
                 </div>
-
-                <!-- Right: Status Badge -->
                 <div class="flex-shrink-0">
                     {% if service.status.name == 'ok' %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-green-500/10 text-green-400 border border-green-500/20">
-                            <div class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div> Operational
-                        </span>
+                        <span class="text-green-500 text-xs font-bold border border-green-900/50 bg-green-900/10 px-2 py-1 rounded"><i class="fas fa-check mr-1"></i> Operational</span>
                     {% elif service.status.name == 'maintenance' %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                            <i class="fas fa-tools mr-2"></i> Maintenance
-                        </span>
+                        <span class="text-blue-400 text-xs font-bold border border-blue-900/50 bg-blue-900/10 px-2 py-1 rounded"><i class="fas fa-tools mr-1"></i> Maint</span>
                     {% elif service.status.name == 'minor' %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
-                            <i class="fas fa-exclamation-triangle mr-2"></i> Minor Issue
-                        </span>
+                        <span class="text-yellow-400 text-xs font-bold border border-yellow-900/50 bg-yellow-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-triangle mr-1"></i> Minor</span>
                     {% elif service.status.name == 'major' %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                            <i class="fas fa-exclamation-circle mr-2"></i> Major Outage
-                        </span>
+                        <span class="text-orange-400 text-xs font-bold border border-orange-900/50 bg-orange-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-circle mr-1"></i> Major</span>
                     {% elif service.status.name == 'critical' %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-red-500/10 text-red-400 border border-red-500/20">
-                            <i class="fas fa-times-circle mr-2"></i> Critical
-                        </span>
-                    {% else %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-gray-700 text-gray-400 border border-gray-600">
-                            <i class="fas fa-question-circle mr-2"></i> Unknown
-                        </span>
+                        <span class="text-red-400 text-xs font-bold border border-red-900/50 bg-red-900/10 px-2 py-1 rounded"><i class="fas fa-times-circle mr-1"></i> Critical</span>
+                    {% elif service.status.name == 'unavailable' %}
+                        <span class="text-gray-400 text-xs font-bold border border-gray-700 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-ban mr-1"></i> Unavailable</span>
                     {% endif %}
                 </div>
-
             </div>
             {% endfor %}
-
         </div>
 
-        <!-- Footer Actions -->
         <div class="mt-8 flex flex-col items-center gap-4">
             <div class="flex gap-4">
-                <a href="/" class="inline-flex items-center gap-2 px-6 py-2 bg-dark-800 border border-dark-700 text-gray-400 rounded-md shadow-sm hover:bg-dark-700 hover:text-white text-sm font-medium transition">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </a>
-                
-                <a href="/download_report" class="inline-flex items-center gap-2 px-6 py-2 bg-green-600 border border-green-700 text-white rounded-md shadow-sm hover:bg-green-700 text-sm font-medium transition">
-                    <i class="fas fa-file-excel"></i> Excel Report
-                </a>
-
-                <button onclick="copyReportDraft()" id="copyBtn" class="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 border border-blue-700 text-white rounded-md shadow-sm hover:bg-blue-700 text-sm font-medium transition">
-                    <i class="fas fa-copy"></i> Copy Draft
-                </button>
+                <a href="/" class="inline-flex items-center gap-2 px-6 py-2 bg-dark-800 border border-dark-700 text-gray-400 rounded-md shadow-sm hover:bg-dark-700 hover:text-white text-sm font-medium transition"><i class="fas fa-sync-alt"></i> Refresh</a>
+                <a href="/download_report" class="inline-flex items-center gap-2 px-6 py-2 bg-green-600 border border-green-700 text-white rounded-md shadow-sm hover:bg-green-700 text-sm font-medium transition"><i class="fas fa-file-excel"></i> Excel Report</a>
+                <button onclick="copyReportDraft()" id="copyBtn" class="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 border border-blue-700 text-white rounded-md shadow-sm hover:bg-blue-700 text-sm font-medium transition"><i class="fas fa-copy"></i> Copy Draft</button>
             </div>
             <div id="refreshStatus" class="text-xs text-gray-600">Auto-refresh disabled</div>
         </div>
-
     </div>
 
-    <!-- Modal Popup -->
     <div id="serviceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-20">
         <div class="modal-content w-full max-w-6xl h-[85vh] bg-dark-900 rounded-xl shadow-2xl border border-dark-700 flex flex-col relative overflow-hidden">
-            <button onclick="closeModal()" class="absolute top-4 right-6 z-50 text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors">
-                <i class="fas fa-times"></i>
-            </button>
+            <button onclick="closeModal()" class="absolute top-4 right-6 z-50 text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors"><i class="fas fa-times"></i></button>
             <iframe id="modalIframe" src="" class="w-full h-full border-0" title="Service Details"></iframe>
         </div>
     </div>
 
     <script>
-        // Modal Logic
+        function toggleIncidents() {
+            const dropdown = document.getElementById('incidentDropdown');
+            const chevron = document.getElementById('incidentChevron');
+            if (dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                chevron.classList.remove('rotate-0');
+            } else {
+                dropdown.classList.add('open');
+                chevron.classList.add('rotate-0');
+            }
+        }
         const modal = document.getElementById('serviceModal');
         const iframe = document.getElementById('modalIframe');
-
         function openModal(serviceName) {
             iframe.src = `/service/${serviceName}`;
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
-
         function closeModal() {
             modal.classList.remove('active');
             setTimeout(() => { iframe.src = ''; }, 300);
             document.body.style.overflow = 'auto';
         }
-
         modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
-
-        // Copy Text Draft
         async function copyReportDraft() {
             const btn = document.getElementById('copyBtn');
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
-
             try {
                 const response = await fetch('/get_report_text');
                 const data = await response.json();
@@ -245,44 +217,40 @@
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
-
-        // --- Auto Refresh Logic ---
         let refreshTimer;
-
-        function updateRefreshInterval() {
-            const select = document.getElementById('refreshSelect');
+        function toggleSelect() { document.querySelector('.custom-options').classList.toggle('open'); }
+        function setRefresh(seconds, label) {
+            const selectValueEl = document.getElementById('selectValue');
+            if (selectValueEl) selectValueEl.innerText = label;
+            document.querySelectorAll('.custom-option').forEach(opt => opt.classList.remove('selected'));
+            const targetOption = document.querySelector(`.custom-option[data-value="${seconds}"]`);
+            if (targetOption) targetOption.classList.add('selected');
+            const optionsEl = document.querySelector('.custom-options');
+            if (optionsEl) optionsEl.classList.remove('open');
+            localStorage.setItem('refreshInterval', seconds);
+            localStorage.setItem('refreshLabel', label);
             const statusText = document.getElementById('refreshStatus');
-            const intervalSeconds = parseInt(select.value);
-            
-            // Save preference
-            localStorage.setItem('refreshInterval', intervalSeconds);
-            
-            // Clear existing
             if (refreshTimer) clearInterval(refreshTimer);
-
-            if (intervalSeconds > 0) {
-                statusText.innerText = `Auto-refreshes every ${intervalSeconds} seconds`;
-                refreshTimer = setInterval(() => {
-                    // Only reload if user isn't viewing the modal
-                    if (!modal.classList.contains('active')) {
-                        window.location.reload();
-                    }
-                }, intervalSeconds * 1000);
+            if (seconds > 0) {
+                if (statusText) statusText.innerText = `Auto-refreshes every ${seconds} seconds`;
+                refreshTimer = setInterval(() => { if (!modal.classList.contains('active')) window.location.reload(); }, seconds * 1000);
             } else {
-                statusText.innerText = "Auto-refresh disabled";
+                if (statusText) statusText.innerText = "Auto-refresh disabled";
             }
         }
-
-        // Initialize on load
-        document.addEventListener('DOMContentLoaded', () => {
-            const saved = localStorage.getItem('refreshInterval');
-            const select = document.getElementById('refreshSelect');
-            if (saved !== null) {
-                select.value = saved;
+        window.addEventListener('click', function(e) {
+            const select = document.querySelector('.custom-select-wrapper');
+            if (select && !select.contains(e.target)) {
+                const options = document.querySelector('.custom-options');
+                if(options) options.classList.remove('open');
             }
-            updateRefreshInterval(); // Apply setting
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedSeconds = localStorage.getItem('refreshInterval');
+            const savedLabel = localStorage.getItem('refreshLabel');
+            if (savedSeconds !== null && savedLabel) { setRefresh(parseInt(savedSeconds), savedLabel); }
+            else { setRefresh(0, 'Auto refresh off'); }
         });
     </script>
-
 </body>
 </html>
