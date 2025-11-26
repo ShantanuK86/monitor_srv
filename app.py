@@ -2,15 +2,18 @@ import requests
 from bs4 import BeautifulSoup
 from enum import Enum
 import concurrent.futures
-from flask import Flask, render_template, abort, send_file, request, jsonify
+from flask import Flask, render_template, abort, send_file, request, jsonify, flash, redirect, url_for
 import time
 import random
 from datetime import datetime, timedelta
 import pandas as pd
 from io import BytesIO
 import threading
+import os
+import json
 
 app = Flask(__name__)
+app.secret_key = 'supersecretkey' # Required for flashing messages
 
 # Global storage for the daily report
 DAILY_LOG = []
@@ -68,10 +71,7 @@ class Service(object):
                  "duration": "14m"
              })
 
-        # --- Generate Mock Nested Components ---
         components = []
-        
-        # Define structure with optional sub-components
         service_structure = {
             'Amazon Web Services': [
                 {'name': 'Elastic Compute Cloud (EC2)', 'subs': ['Region: us-east-1', 'Region: eu-west-1', 'API Endpoint', 'Management Console']},
@@ -96,35 +96,19 @@ class Service(object):
                 {'name': 'Bitbucket', 'subs': ['Git over HTTPS', 'Git over SSH', 'Pull Requests']}
             ]
         }
-
-        # Default for others
         defaults = [{'name': 'API', 'subs': []}, {'name': 'Dashboard', 'subs': []}, {'name': 'Database', 'subs': ['Read Replicas', 'Write Master']}]
-        
         structure = service_structure.get(self.name, defaults)
         
         for item in structure:
-            # Parent Status
             p_status = "Operational"
             if random.random() > 0.95: p_status = "Maintenance"
-            
             children = []
             for sub_name in item['subs']:
                 c_status = "Operational"
-                if p_status != "Operational": 
-                    c_status = p_status # Inherit issues
-                elif random.random() > 0.98: 
-                    c_status = "Partial Outage"
-                
-                children.append({
-                    "name": sub_name,
-                    "status": c_status
-                })
-            
-            components.append({
-                "name": item['name'],
-                "status": p_status,
-                "children": children
-            })
+                if p_status != "Operational": c_status = p_status
+                elif random.random() > 0.98: c_status = "Partial Outage"
+                children.append({"name": sub_name, "status": c_status})
+            components.append({"name": item['name'], "status": p_status, "children": children})
         
         return {
             "response_times": data,
@@ -317,55 +301,31 @@ def generate_excel_file():
     filename = f"Status_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return output, filename
 
-# ==========================================
-# BACKGROUND SCHEDULER FOR DAILY REPORT
-# ==========================================
 def background_scheduler():
-    """Runs every 15 minutes to snapshot all services."""
     print("Background Scheduler Started...")
     while True:
         now = datetime.now()
-        
-        # Reset log at midnight
         if now.hour == 0 and now.minute < 15 and len(DAILY_LOG) > 90:
             DAILY_LOG.clear()
             print("Daily Log Reset for new day.")
-
-        # Calculate seconds until next 15 minute interval
-        # Intervals: 00, 15, 30, 45
         next_minute = (now.minute // 15 + 1) * 15
         if next_minute == 60:
             next_time = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         else:
             next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        
         delay = (next_time - now).total_seconds()
         time.sleep(delay)
-        
-        # --- Run Checks ---
         print(f"Running Scheduled Check at {datetime.now().strftime('%H:%M:%S')}")
-        snapshot = {
-            "timestamp": datetime.now().strftime("%H:%M"),
-            "services": {}
-        }
-        
-        # We don't use ThreadPool here to avoid race conditions with the main app pool, 
-        # and speed isn't critical for background task
+        snapshot = {"timestamp": datetime.now().strftime("%H:%M"), "services": {}}
         for service in SERVICES:
             try:
-                # Direct check, not updating 'history' to keep UI sparklines separate if needed, 
-                # but checking 'get_status' triggers a real request.
-                # To strictly follow 'not affected by page reloading', we do a fresh check.
                 status = service.get_status()
                 snapshot["services"][service.name] = status.name.upper()
             except:
                 snapshot["services"][service.name] = "UNKNOWN"
-        
         DAILY_LOG.append(snapshot)
-        # Sleep a bit to avoid double execution in the same second
         time.sleep(2)
 
-# Start the background thread
 threading.Thread(target=background_scheduler, daemon=True).start()
 
 # ==========================================
@@ -389,15 +349,7 @@ def monitoring():
         future_to_service = {executor.submit(check_single_service, s): s for s in SERVICES}
         for future in concurrent.futures.as_completed(future_to_service):
             results.append(future.result())
-    
-    sort_map = {
-        Status.critical: 0,
-        Status.major: 1,
-        Status.minor: 2,
-        Status.unavailable: 3,
-        Status.maintenance: 4,
-        Status.ok: 5
-    }
+    sort_map = {Status.critical: 0, Status.major: 1, Status.minor: 2, Status.unavailable: 3, Status.maintenance: 4, Status.ok: 5}
     results.sort(key=lambda x: (sort_map.get(x['status'], 6), x['name']))
     total = len(results)
     running = sum(1 for r in results if r['status'] == Status.ok)
@@ -418,33 +370,20 @@ def download_report():
 
 @app.route('/download_daily_report')
 def download_daily_report():
-    """Generates Excel from the background DAILY_LOG"""
-    if not DAILY_LOG:
-        # Return empty or error if no data yet
-        return "No daily data collected yet. Please wait for the next 15-minute interval.", 404
-
-    # Transform Data for DataFrame
-    # Goal: Rows = 12:00, 12:15... | Cols = Service Names
-    
-    # 1. Extract unique timestamps and service names
+    if not DAILY_LOG: return "No daily data collected yet. Please wait for the next 15-minute interval.", 404
     data = []
     for entry in DAILY_LOG:
         row = {"Time": entry["timestamp"]}
         row.update(entry["services"])
         data.append(row)
-        
     df = pd.DataFrame(data)
-    
-    # Write to Excel
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Daily 24h Report')
         worksheet = writer.sheets['Daily 24h Report']
-        # Auto-width
         for idx, col in enumerate(df.columns):
             max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = max_len
-
     output.seek(0)
     date_str = datetime.now().strftime("%Y-%m-%d")
     filename = f"Daily_Report_{date_str}.xlsx"
@@ -463,15 +402,92 @@ def get_report_text():
     for r in results:
         status_str = r['status'].name.upper() if r['status'] else "UNKNOWN"
         rows.append({"name": r['name'], "status": status_str, "time": report_time})
-    if rows:
-        max_name = max(len(r["name"]) for r in rows)
-        max_status = max(len(r["status"]) for r in rows)
+    if rows: max_name = max(len(r["name"]) for r in rows); max_status = max(len(r["status"]) for r in rows)
     else: max_name = 10; max_status = 10
     w_name = max(len("Service Name"), max_name) + 5
     w_status = max(len("Status"), max_status) + 5
     lines = [f"{'Service Name'.ljust(w_name)}{'Status'.ljust(w_status)}Timestamp", "-" * (w_name + w_status + 20)]
     for row in rows: lines.append(f"{row['name'].ljust(w_name)}{row['status'].ljust(w_status)}{row['time']}")
     return jsonify({"body": "\n".join(lines)})
+
+# --- NEW DASHBOARD ROUTES ---
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/upload_file', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(url_for('dashboard'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(url_for('dashboard'))
+    
+    if file:
+        try:
+            # Determine file type and read
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file)
+            elif file.filename.endswith(('.xls', '.xlsx')):
+                df = pd.read_excel(file)
+            else:
+                flash('Invalid file type. Please upload CSV or Excel.')
+                return redirect(url_for('dashboard'))
+            
+            # --- DATA PROCESSING ---
+            
+            # 1. Clean Column Names (strip whitespace, lower case)
+            df.columns = [c.strip().lower() for c in df.columns]
+            
+            # 2. Parse Dates
+            # Format: YYYY-MM-DD THH:MM:SS.000Z (User specified space between date and time?)
+            # We'll try flexible parsing first, then specific if needed.
+            for col in ['creationtime', 'recentreporttime']:
+                if col in df.columns:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+
+            # 3. Extract Unique Filter Values
+            services_list = sorted(df['services'].unique().astype(str).tolist()) if 'services' in df.columns else []
+            stages_list = sorted(df['stage'].unique().astype(str).tolist()) if 'stage' in df.columns else []
+            states_list = sorted(df['state'].unique().astype(str).tolist()) if 'state' in df.columns else []
+
+            # 4. Prepare Global Stats (Total Revenue etc.)
+            # Since the user didn't provide columns for Revenue/Sales, we'll simulate/derive or count
+            # If there are no revenue columns, we can count incidents instead for "Total Revenue" placeholder or rename it.
+            # Given the image has $1250.00, New Customers etc., I will calculate:
+            # - Total Incidents (Active Accounts placeholder)
+            # - Open vs Closed (Growth Rate placeholder)
+            
+            stats = {
+                "total_incidents": len(df),
+                "open_incidents": len(df[df['state'] == 'open']) if 'state' in df.columns else 0,
+                "closed_incidents": len(df[df['state'] == 'closed']) if 'state' in df.columns else 0,
+                "prod_incidents": len(df[df['stage'] == 'prd']) if 'stage' in df.columns else 0
+            }
+
+            # 5. Serialize for Frontend
+            # We convert Timestamp objects to string ISO format for JSON serialization
+            records = df.to_dict(orient='records')
+            for r in records:
+                for k, v in r.items():
+                    if isinstance(v, (pd.Timestamp, datetime)):
+                        r[k] = v.isoformat()
+
+            return render_template('dashboard.html', 
+                                   records=records, 
+                                   services=services_list, 
+                                   stages=stages_list, 
+                                   states=states_list,
+                                   stats=stats,
+                                   filename=file.filename)
+
+        except Exception as e:
+            flash(f'Error processing file: {str(e)}')
+            return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
