@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware List - isServiceUp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 900: '#0d1117', 800: '#161b22', 700: '#21262d', 600: '#30363d' },
+                        primary: { 500: '#3b82f6', 600: '#2563eb' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .file-drop-area { border: 2px dashed #30363d; transition: all 0.3s; }
+        .file-drop-area:hover { border-color: #3b82f6; background-color: #161b22; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .hw-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; padding: 1rem; border-bottom: 1px solid #30363d; text-align: left; white-space: nowrap; }
+        .hw-table td { padding: 1rem; border-bottom: 1px solid #21262d; color: #e5e7eb; font-size: 0.875rem; vertical-align: middle; white-space: nowrap; }
+        .hw-table tr:hover { background-color: #1c2128; }
+        .checkbox-custom { appearance: none; width: 1.25rem; height: 1.25rem; border: 2px solid #4b5563; border-radius: 0.25rem; background-color: transparent; cursor: pointer; position: relative; }
+        .checkbox-custom:checked { background-color: #3b82f6; border-color: #3b82f6; }
+        .checkbox-custom:checked::after { content: '\f00c'; font-family: 'Font Awesome 5 Free'; font-weight: 900; color: white; font-size: 0.75rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+        /* Column Visibility Dropdown */
+        .col-dropdown { position: relative; }
+        .col-menu { position: absolute; right: 0; top: 100%; width: 200px; max-height: 300px; overflow-y: auto; background: #161b22; border: 1px solid #30363d; border-radius: 6px; z-index: 50; display: none; margin-top: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+        .col-menu.open { display: block; }
+        .col-option { display: flex; align-items: center; padding: 8px 12px; cursor: pointer; color: #c9d1d9; font-size: 0.85rem; }
+        .col-option:hover { background: #21262d; }
+        .col-option input { margin-right: 10px; }
+        
+        .hidden-col { display: none !important; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col pt-24 pb-10 px-4">
+
+    <!-- NAVBAR -->
+    <nav class="fixed top-0 left-0 w-full bg-dark-900/95 backdrop-blur-md border-b border-dark-700 z-40">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full border-2 border-green-500 flex items-center justify-center text-green-500 bg-green-500/10"><i class="fas fa-check text-sm"></i></div>
+                <div class="flex flex-col">
+                    <h1 class="text-lg font-bold tracking-tight text-white leading-tight">isServiceUp</h1>
+                    <span class="text-[10px] text-gray-400 font-medium uppercase tracking-wider">IT Department</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <a href="/" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">Services</a>
+                <a href="/monitoring" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">24*7 Monitoring</a>
+                <a href="/dashboard" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">Dashboard</a>
+                <a href="/hardware_list" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">Hardware List</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="w-full max-w-7xl mx-auto">
+        
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-3xl font-bold text-white">Hardware Inventory</h1>
+            <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500">Source: {{ filename }}</span>
+                <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="text-sm text-blue-500 hover:text-blue-400"><i class="fas fa-upload mr-1"></i> Upload New</button>
+            </div>
+        </div>
+
+        <!-- Hidden Upload Modal (Initially hidden since we likely have default data) -->
+        <div id="upload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div class="bg-dark-800 border border-dark-700 rounded-xl p-8 max-w-md w-full relative">
+                <button onclick="document.getElementById('upload-modal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+                <form action="/upload_hardware_file" method="post" enctype="multipart/form-data" class="flex flex-col items-center justify-center w-full">
+                    <div class="mb-4 text-center">
+                        <i class="fas fa-server text-3xl text-blue-500 mb-2"></i>
+                        <h3 class="text-xl font-bold text-white">Upload New List</h3>
+                    </div>
+                    <label for="file-upload" class="file-drop-area cursor-pointer flex flex-col items-center justify-center w-full h-32 rounded-xl bg-dark-900 hover:bg-dark-800/50 transition-colors group">
+                        <span class="text-gray-400 font-medium text-sm group-hover:text-white transition-colors">Select CSV/Excel File</span>
+                        <input id="file-upload" name="file" type="file" class="hidden" accept=".csv, .xlsx, .xls" onchange="this.form.submit()">
+                    </label>
+                </form>
+            </div>
+        </div>
+
+        {% if records %}
+        
+        <!-- Controls Bar -->
+        <div class="bg-dark-800 border border-dark-700 rounded-t-xl p-4 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Search -->
+            <div class="relative flex-grow max-w-md">
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                <input type="text" id="searchInput" placeholder="Search inventory..." class="bg-dark-900 border border-dark-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 placeholder-gray-500" oninput="applySearch()">
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-gray-400" id="recordCount">{{ records|length }} items</span>
+                
+                <!-- Column Visibility Dropdown -->
+                <div class="col-dropdown">
+                    <button onclick="toggleColMenu()" class="px-3 py-2 bg-dark-900 border border-dark-600 text-gray-300 rounded hover:text-white text-sm flex items-center gap-2">
+                        <i class="fas fa-columns"></i> Columns <i class="fas fa-chevron-down text-xs"></i>
+                    </button>
+                    <div class="col-menu" id="colMenu">
+                        <!-- Options injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="bg-dark-800 border-x border-b border-dark-700 rounded-b-xl overflow-x-auto relative">
+            <table class="w-full hw-table text-left border-collapse" id="hardwareTable">
+                <thead class="bg-dark-900">
+                    <tr id="tableHeaderRow">
+                        <th class="w-12 text-center sticky left-0 bg-dark-900 z-10 border-r border-dark-700"><input type="checkbox" class="checkbox-custom" id="selectAll" onclick="toggleSelectAll()"></th>
+                        <!-- Headers injected via JS -->
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Rows injected via JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4 px-2">
+            <span class="text-sm text-gray-400" id="pageInfo">Showing 1-10 of {{ records|length }}</span>
+            <div class="flex items-center gap-2">
+                <button onclick="prevPage()" id="prevBtn" class="px-3 py-1.5 bg-dark-800 border border-dark-600 text-white rounded hover:bg-dark-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Previous</button>
+                <button onclick="nextPage()" id="nextBtn" class="px-3 py-1.5 bg-dark-800 border border-dark-600 text-white rounded hover:bg-dark-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">Next</button>
+            </div>
+        </div>
+
+        {% endif %}
+    </div>
+
+    {% if records %}
+    <script>
+        const rawData = {{ records | tojson }};
+        // Use provided columns or fallback keys from first record
+        const columns = {{ columns | tojson }} || Object.keys(rawData[0] || {});
+        
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let filteredData = [...rawData];
+        
+        // Track hidden columns by index
+        let hiddenColumns = new Set();
+
+        // Initialize Column Menu
+        function initColumnMenu() {
+            const menu = document.getElementById('colMenu');
+            menu.innerHTML = '';
+            
+            columns.forEach((col, index) => {
+                const label = col.replace(/_/g, ' ').toUpperCase();
+                const div = document.createElement('div');
+                div.className = 'col-option';
+                div.innerHTML = `
+                    <input type="checkbox" checked onchange="toggleColumn(${index}, this.checked)">
+                    <span>${label}</span>
+                `;
+                menu.appendChild(div);
+            });
+        }
+
+        function toggleColMenu() {
+            document.getElementById('colMenu').classList.toggle('open');
+        }
+
+        // Close menu when clicking outside
+        window.addEventListener('click', function(e) {
+            if (!e.target.closest('.col-dropdown')) {
+                document.getElementById('colMenu').classList.remove('open');
+            }
+        });
+
+        function toggleColumn(index, isVisible) {
+            if (isVisible) {
+                hiddenColumns.delete(index);
+            } else {
+                hiddenColumns.add(index);
+            }
+            renderTable(); // Re-render to apply classes
+        }
+
+        function renderHeaders() {
+            const row = document.getElementById('tableHeaderRow');
+            // Keep the first checkbox column
+            row.innerHTML = '<th class="w-12 text-center sticky left-0 bg-dark-900 z-10 border-r border-dark-700"><input type="checkbox" class="checkbox-custom" id="selectAll" onclick="toggleSelectAll()"></th>';
+            
+            columns.forEach((col, index) => {
+                const th = document.createElement('th');
+                th.innerText = col.replace(/_/g, ' ');
+                if (hiddenColumns.has(index)) th.classList.add('hidden-col');
+                row.appendChild(th);
+            });
+            // Add Actions column at end
+            const actionTh = document.createElement('th');
+            actionTh.className = 'w-10';
+            row.appendChild(actionTh);
+        }
+
+        function renderTable() {
+            renderHeaders(); // Re-render headers to match visibility state
+            
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageItems = filteredData.slice(start, end);
+
+            if (pageItems.length === 0) {
+                const colSpan = columns.length + 2;
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center py-8 text-gray-500 italic">No matching records found</td></tr>`;
+                return;
+            }
+
+            pageItems.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                let cellsHtml = `<td class="text-center sticky left-0 bg-dark-800 z-10 border-r border-dark-700"><input type="checkbox" class="checkbox-custom row-checkbox"></td>`;
+                
+                columns.forEach((col, index) => {
+                    const val = row[col] || '-';
+                    const hiddenClass = hiddenColumns.has(index) ? 'hidden-col' : '';
+                    
+                    // Simple styling based on column name for demo
+                    if (col === 'status' || col === 'active') {
+                        cellsHtml += `<td class="${hiddenClass}"><span class="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-green-900/20 text-green-400 border border-green-900/30"><span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> ${val}</span></td>`;
+                    } else if (col === 'type') {
+                        cellsHtml += `<td class="${hiddenClass}"><span class="bg-blue-900/30 text-blue-400 px-2 py-1 rounded text-xs border border-blue-900/50">${val}</span></td>`;
+                    } else {
+                        cellsHtml += `<td class="${hiddenClass}">${val}</td>`;
+                    }
+                });
+
+                cellsHtml += `<td class="text-right"><button class="text-gray-500 hover:text-white"><i class="fas fa-ellipsis-v"></i></button></td>`;
+                
+                tr.innerHTML = cellsHtml;
+                tbody.appendChild(tr);
+            });
+
+            // Update Pagination Info
+            const totalItems = filteredData.length;
+            const startDisplay = totalItems === 0 ? 0 : start + 1;
+            const endDisplay = Math.min(end, totalItems);
+            document.getElementById('pageInfo').innerText = `Showing ${startDisplay}-${endDisplay} of ${totalItems}`;
+            document.getElementById('recordCount').innerText = `${totalItems} items`;
+            
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage >= Math.ceil(totalItems / itemsPerPage);
+        }
+
+        function applySearch() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            filteredData = rawData.filter(row => {
+                return Object.values(row).some(val => 
+                    String(val).toLowerCase().includes(term)
+                );
+            });
+            currentPage = 1;
+            renderTable();
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < Math.ceil(filteredData.length / itemsPerPage)) {
+                currentPage++;
+                renderTable();
+            }
+        }
+
+        function toggleSelectAll() {
+            const master = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(cb => cb.checked = master.checked);
+        }
+
+        // Initialize
+        initColumnMenu();
+        renderTable();
+    </script>
+    {% endif %}
+
+</body>
+</html>

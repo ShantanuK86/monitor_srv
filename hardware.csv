@@ -1,0 +1,9 @@
+sample_no,model_code,id,hwduid,country,year,type,name,local_set,pno,slot,vendor,sn,location,user,project
+1,MBP-16-2023,1001,HWD-001,USA,2023,Laptop,MacBook Pro,US-HQ,P-101,A1,Apple,C02G1234ABCD,New York,John Doe,Project Alpha
+2,DELL-XPS-15,1002,HWD-002,UK,2022,Laptop,Dell XPS 15,UK-Branch,P-102,B2,Dell,DL-5678EFGH,London,Jane Smith,Project Beta
+3,HP-ZBOOK,1003,HWD-003,Germany,2021,Workstation,HP ZBook,DE-Office,P-103,C3,HP,HP-9012IJKL,Berlin,Hans Mueller,Project Gamma
+4,CISCO-RTR,1004,HWD-004,France,2020,Router,Cisco ISR 4000,FR-Site,P-104,D4,Cisco,CS-3456MNOP,Paris,Network Team,Infrastructure Upgrade
+5,LEN-TP-X1,1005,HWD-005,Japan,2023,Laptop,ThinkPad X1 Carbon,JP-Hub,P-105,E5,Lenovo,LN-7890QRST,Tokyo,Sato Tanaka,Project Delta
+6,SRV-DELL-R740,1006,HWD-006,USA,2019,Server,Dell PowerEdge R740,US-DC,P-106,R1-U10,Dell,DL-SERVER-001,New York,IT Ops,Data Center Refresh
+7,MON-DELL-27,1007,HWD-007,Canada,2022,Monitor,Dell Ultrasharp 27,CA-Office,P-107,D1,Dell,DL-MON-007,Toronto,Emily White,Project Epsilon
+8,IPAD-PRO-12,1008,HWD-008,Australia,2023,Tablet,iPad Pro 12.9,AU-Branch,P-108,M1,Apple,AP-TAB-008,Sydney,Chris Green,Field Operations

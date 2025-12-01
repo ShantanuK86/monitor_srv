@@ -489,5 +489,81 @@ def upload_file():
             flash(f'Error processing file: {str(e)}')
             return redirect(url_for('dashboard'))
 
+@app.route('/hardware_list')
+def hardware_list():
+    global LATEST_HARDWARE_DATA
+    
+    # Load default static file if no data exists
+    if not LATEST_HARDWARE_DATA:
+        try:
+            # Check if file exists, otherwise load from string (simulating repo file)
+            default_csv = "hardware.csv"
+            if os.path.exists(default_csv):
+                df = pd.read_csv(default_csv)
+            else:
+                # Fallback if file isn't physically on disk in this env
+                from io import StringIO
+                csv_content = """sample_no,model_code,id,hwduid,country,year,type,name,local_set,pno,slot,vendor,sn,location,user,project
+1,MBP-16-2023,1001,HWD-001,USA,2023,Laptop,MacBook Pro,US-HQ,P-101,A1,Apple,C02G1234ABCD,New York,John Doe,Project Alpha
+2,DELL-XPS-15,1002,HWD-002,UK,2022,Laptop,Dell XPS 15,UK-Branch,P-102,B2,Dell,DL-5678EFGH,London,Jane Smith,Project Beta
+3,HP-ZBOOK,1003,HWD-003,Germany,2021,Workstation,HP ZBook,DE-Office,P-103,C3,HP,HP-9012IJKL,Berlin,Hans Mueller,Project Gamma
+4,CISCO-RTR,1004,HWD-004,France,2020,Router,Cisco ISR 4000,FR-Site,P-104,D4,Cisco,CS-3456MNOP,Paris,Network Team,Infrastructure Upgrade
+5,LEN-TP-X1,1005,HWD-005,Japan,2023,Laptop,ThinkPad X1 Carbon,JP-Hub,P-105,E5,Lenovo,LN-7890QRST,Tokyo,Sato Tanaka,Project Delta
+6,SRV-DELL-R740,1006,HWD-006,USA,2019,Server,Dell PowerEdge R740,US-DC,P-106,R1-U10,Dell,DL-SERVER-001,New York,IT Ops,Data Center Refresh
+7,MON-DELL-27,1007,HWD-007,Canada,2022,Monitor,Dell Ultrasharp 27,CA-Office,P-107,D1,Dell,DL-MON-007,Toronto,Emily White,Project Epsilon
+8,IPAD-PRO-12,1008,HWD-008,Australia,2023,Tablet,iPad Pro 12.9,AU-Branch,P-108,M1,Apple,AP-TAB-008,Sydney,Chris Green,Field Operations"""
+                df = pd.read_csv(StringIO(csv_content))
+
+            # Clean columns
+            df.columns = [c.strip().lower().replace(' ', '_').replace('/', '_').replace('.', '') for c in df.columns]
+            
+            records = df.fillna('').to_dict(orient='records')
+            LATEST_HARDWARE_DATA = {
+                'records': records,
+                'filename': 'hardware_list.csv (Default)',
+                'columns': df.columns.tolist()
+            }
+        except Exception as e:
+            print(f"Error loading default hardware list: {e}")
+            
+    return render_template('hardware_list.html', **LATEST_HARDWARE_DATA)
+
+@app.route('/upload_hardware_file', methods=['POST'])
+def upload_hardware_file():
+    global LATEST_HARDWARE_DATA
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(url_for('hardware_list'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(url_for('hardware_list'))
+    
+    if file:
+        try:
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file)
+            elif file.filename.endswith(('.xls', '.xlsx')):
+                df = pd.read_excel(file)
+            else:
+                flash('Invalid file type. Please upload CSV or Excel.')
+                return redirect(url_for('hardware_list'))
+            
+            df.columns = [c.strip().lower().replace(' ', '_').replace('/', '_').replace('.', '') for c in df.columns]
+            records = df.fillna('').to_dict(orient='records')
+            
+            LATEST_HARDWARE_DATA = {
+                'records': records,
+                'filename': file.filename,
+                'columns': df.columns.tolist()
+            }
+            
+            return render_template('hardware_list.html', **LATEST_HARDWARE_DATA)
+
+        except Exception as e:
+            flash(f'Error processing file: {str(e)}')
+            return redirect(url_for('hardware_list'))
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

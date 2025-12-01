@@ -54,6 +54,7 @@
                 <a href="/" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">Services</a>
                 <a href="/monitoring" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">24*7 Monitoring</a>
                 <a href="/dashboard" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">Dashboard</a>
+                <a href="/hardware_list" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">Hardware List</a>
             </div>
         </div>
     </nav>
@@ -138,7 +139,6 @@
                 </div>
                 <div class="text-3xl font-bold text-white mb-2" id="kpiTotal">0</div>
                 <div class="text-xs text-gray-500">Trending up this month</div>
-                <div class="text-[10px] text-gray-600 mt-1">Visitors for last 6 months</div>
             </div>
 
             <!-- Open Issues -->
@@ -151,7 +151,6 @@
                 </div>
                 <div class="text-3xl font-bold text-white mb-2" id="kpiOpen">0</div>
                 <div class="text-xs text-gray-500">Down 20% this period</div>
-                <div class="text-[10px] text-gray-600 mt-1">Acquisition needs attention</div>
             </div>
 
             <!-- Stage Breakdown -->
@@ -172,7 +171,6 @@
                 <div class="w-full bg-dark-700 h-1.5 rounded-full overflow-hidden mt-1">
                     <div id="kpiStageBar" class="bg-blue-500 h-full rounded-full" style="width: 0%"></div>
                 </div>
-                <div class="text-[10px] text-gray-600 mt-2">Production vs Staging</div>
             </div>
 
             <!-- Closed Issues -->
@@ -185,14 +183,13 @@
                 </div>
                 <div class="text-3xl font-bold text-white mb-2" id="kpiClosed">0</div>
                 <div class="text-xs text-gray-500">Steady performance</div>
-                <div class="text-[10px] text-gray-600 mt-1">Meets resolution targets</div>
             </div>
         </div>
 
         <!-- Trend Chart -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 mb-8">
-            <h2 class="text-lg font-bold text-white mb-4">Incident Volume Over Time</h2>
-            <div class="w-full h-64">
+            <h2 class="text-lg font-bold text-white mb-4">Total Incidents by Service</h2>
+            <div class="w-full h-72">
                 <canvas id="trendChart"></canvas>
             </div>
         </div>
@@ -223,6 +220,7 @@
     <script>
         const rawData = {{ records | tojson }};
         let chartInstance = null;
+        let currentChartView = 'daily'; // Default view (Kept variable but not used in new bar logic)
 
         // Initialize Flatpickr
         const fp = flatpickr("#dateRange", { 
@@ -290,7 +288,7 @@
             const prodPct = total > 0 ? (prod / total) * 100 : 0;
             document.getElementById("kpiStageBar").style.width = `${prodPct}%`;
 
-            // 2. Update Chart (Aggregation by Day)
+            // 2. Update Chart (Incident Count per Service)
             updateChart(data);
 
             // 3. Grouping and Trend Logic
@@ -452,13 +450,41 @@
 
         function updateChart(data) {
             const ctx = document.getElementById('trendChart').getContext('2d');
-            const dateCounts = {};
+            
+            // Calculate incidents per service and time to close
+            const serviceData = {};
+            
             data.forEach(r => {
-                const dateKey = new Date(r.creationtime).toLocaleDateString();
-                dateCounts[dateKey] = (dateCounts[dateKey] || 0) + 1;
+                if (!serviceData[r.services]) {
+                    serviceData[r.services] = { count: 0, timeToClose: [] };
+                }
+                serviceData[r.services].count++;
+                
+                // Sample Logic for Time to Close (Assuming 'timetoclosedinminute' column or calculation)
+                // For now using mock calculation based on creationtime vs recentreporttime if closed
+                if (r.state === 'closed' && r.recentreporttime && r.creationtime) {
+                    const start = new Date(r.creationtime);
+                    const end = new Date(r.recentreporttime);
+                    const diffMins = Math.max(0, Math.round((end - start) / 60000));
+                    serviceData[r.services].timeToClose.push(diffMins);
+                } else if (r.timetoclosedinminute) {
+                     // If explicit column exists (future proofing as requested)
+                     serviceData[r.services].timeToClose.push(parseInt(r.timetoclosedinminute) || 0);
+                }
             });
-            const labels = Object.keys(dateCounts).sort((a,b) => new Date(a) - new Date(b));
-            const values = labels.map(d => dateCounts[d]);
+
+            // Sort by count descending
+            const sortedServices = Object.keys(serviceData).sort((a,b) => serviceData[b].count - serviceData[a].count);
+            // Take top 20
+            const topServices = sortedServices.slice(0, 20);
+            
+            const labels = topServices;
+            const incidentCounts = topServices.map(s => serviceData[s].count);
+            const avgTimeClose = topServices.map(s => {
+                const times = serviceData[s].timeToClose;
+                if (times.length === 0) return 0;
+                return Math.round(times.reduce((a,b) => a+b, 0) / times.length);
+            });
 
             if (chartInstance) chartInstance.destroy();
 
@@ -466,22 +492,61 @@
                 type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'Incidents',
-                        data: values,
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 4,
-                        barThickness: 'flex',
-                        maxBarThickness: 30
-                    }]
+                    datasets: [
+                        {
+                            label: 'Total Incidents',
+                            data: incidentCounts,
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 4,
+                            barThickness: 'flex',
+                            maxBarThickness: 30,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Avg Time to Close (min)',
+                            data: avgTimeClose,
+                            backgroundColor: '#10b981', // Green for time
+                            borderRadius: 4,
+                            barThickness: 'flex',
+                            maxBarThickness: 30,
+                            yAxisID: 'y1'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#161b22' } },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: { 
+                        legend: { position: 'top', labels: { color: '#9ca3af' } }, 
+                        tooltip: { backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1 } 
+                    },
                     scales: {
-                        y: { beginAtZero: true, grid: { color: '#30363d' }, ticks: { color: '#94a3b8' } },
-                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                        y: { 
+                            beginAtZero: true, 
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: '#30363d' }, 
+                            ticks: { color: '#94a3b8' },
+                            title: { display: true, text: 'Incident Count', color: '#3b82f6' }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // only want the grid lines for one axis to show up
+                            ticks: { color: '#94a3b8' },
+                            title: { display: true, text: 'Avg Time (min)', color: '#10b981' }
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#94a3b8', autoSkip: false, maxRotation: 45, minRotation: 45 } 
+                        }
                     }
                 }
             });
