@@ -491,17 +491,16 @@ def upload_file():
 
 @app.route('/hardware_list')
 def hardware_list():
-    global LATEST_HARDWARE_DATA
+    global LATEST_HARDWARE_DATA, CURRENT_HARDWARE_DF
     
     # Load default static file if no data exists
     if not LATEST_HARDWARE_DATA:
         try:
-            # Check if file exists, otherwise load from string (simulating repo file)
-            default_csv = "hardware.csv"
+            default_csv = "hardware_list.csv"
             if os.path.exists(default_csv):
                 df = pd.read_csv(default_csv)
             else:
-                # Fallback if file isn't physically on disk in this env
+                # Fallback content
                 from io import StringIO
                 csv_content = """sample_no,model_code,id,hwduid,country,year,type,name,local_set,pno,slot,vendor,sn,location,user,project
 1,MBP-16-2023,1001,HWD-001,USA,2023,Laptop,MacBook Pro,US-HQ,P-101,A1,Apple,C02G1234ABCD,New York,John Doe,Project Alpha
@@ -517,6 +516,8 @@ def hardware_list():
             # Clean columns
             df.columns = [c.strip().lower().replace(' ', '_').replace('/', '_').replace('.', '') for c in df.columns]
             
+            CURRENT_HARDWARE_DF = df
+            
             records = df.fillna('').to_dict(orient='records')
             LATEST_HARDWARE_DATA = {
                 'records': records,
@@ -530,7 +531,7 @@ def hardware_list():
 
 @app.route('/upload_hardware_file', methods=['POST'])
 def upload_hardware_file():
-    global LATEST_HARDWARE_DATA
+    global LATEST_HARDWARE_DATA, CURRENT_HARDWARE_DF
     if 'file' not in request.files:
         flash('No file part')
         return redirect(url_for('hardware_list'))
@@ -551,6 +552,7 @@ def upload_hardware_file():
                 return redirect(url_for('hardware_list'))
             
             df.columns = [c.strip().lower().replace(' ', '_').replace('/', '_').replace('.', '') for c in df.columns]
+            CURRENT_HARDWARE_DF = df
             records = df.fillna('').to_dict(orient='records')
             
             LATEST_HARDWARE_DATA = {
@@ -564,6 +566,63 @@ def upload_hardware_file():
         except Exception as e:
             flash(f'Error processing file: {str(e)}')
             return redirect(url_for('hardware_list'))
+
+@app.route('/delete_hardware_row', methods=['POST'])
+def delete_hardware_row():
+    global LATEST_HARDWARE_DATA, CURRENT_HARDWARE_DF
+    try:
+        # Expecting the index of the row to delete
+        data = request.json
+        index_to_delete = int(data.get('index'))
+        
+        if CURRENT_HARDWARE_DF is not None:
+            # Drop by index
+            if 0 <= index_to_delete < len(CURRENT_HARDWARE_DF):
+                CURRENT_HARDWARE_DF = CURRENT_HARDWARE_DF.drop(CURRENT_HARDWARE_DF.index[index_to_delete]).reset_index(drop=True)
+                
+                # Update Global Data
+                records = CURRENT_HARDWARE_DF.fillna('').to_dict(orient='records')
+                LATEST_HARDWARE_DATA['records'] = records
+                
+                # Save back to CSV if it's the default file (optional/simulated)
+                if LATEST_HARDWARE_DATA.get('filename') == 'hardware_list.csv (Default)':
+                     CURRENT_HARDWARE_DF.to_csv("hardware_list.csv", index=False)
+                
+                return jsonify({"success": True, "message": "Row deleted successfully"})
+            else:
+                return jsonify({"success": False, "message": "Index out of bounds"}), 400
+        return jsonify({"success": False, "message": "No data loaded"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/update_hardware_row', methods=['POST'])
+def update_hardware_row():
+    global LATEST_HARDWARE_DATA, CURRENT_HARDWARE_DF
+    try:
+        data = request.json
+        index = int(data.get('index'))
+        new_data = data.get('data') # Dict of col: value
+        
+        if CURRENT_HARDWARE_DF is not None and 0 <= index < len(CURRENT_HARDWARE_DF):
+            # Update DataFrame
+            for col, val in new_data.items():
+                if col in CURRENT_HARDWARE_DF.columns:
+                    CURRENT_HARDWARE_DF.at[index, col] = val
+            
+            # Update Global Data
+            records = CURRENT_HARDWARE_DF.fillna('').to_dict(orient='records')
+            LATEST_HARDWARE_DATA['records'] = records
+            
+            # Save back
+            if LATEST_HARDWARE_DATA.get('filename') == 'hardware_list.csv (Default)':
+                    CURRENT_HARDWARE_DF.to_csv("hardware_list.csv", index=False)
+            
+            return jsonify({"success": True, "message": "Row updated successfully"})
+        
+        return jsonify({"success": False, "message": "Invalid index or data"}), 400
+    except Exception as e:
+        print(e)
+        return jsonify({"success": False, "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
