@@ -74,26 +74,29 @@ class Service(object):
         components = []
         service_structure = {
             'Amazon Web Services': [
-                {'name': 'Elastic Compute Cloud (EC2)', 'subs': ['Region: us-east-1', 'Region: eu-west-1', 'API Endpoint', 'Management Console']},
-                {'name': 'Simple Storage Service (S3)', 'subs': ['Standard Storage', 'Glacier', 'Transfer Acceleration']},
-                {'name': 'RDS', 'subs': ['MySQL', 'PostgreSQL', 'Aurora']},
-                {'name': 'CloudFront', 'subs': []},
-                {'name': 'Route 53', 'subs': ['DNS Queries', 'Health Checks', 'Domain Registration']}
+                {
+                    'name': 'Elastic Compute Cloud (EC2)', 
+                    'subs': [
+                        {'name': 'Region: us-east-1', 'subs': ['Zone A', 'Zone B', 'Zone C']},
+                        {'name': 'Region: eu-west-1', 'subs': ['Zone A', 'Zone B']},
+                        {'name': 'API Endpoint', 'subs': []},
+                        {'name': 'Management Console', 'subs': []}
+                    ]
+                },
+                {'name': 'Simple Storage Service (S3)', 'subs': [{'name': 'Standard Storage', 'subs': []}, {'name': 'Glacier', 'subs': []}]},
+                {'name': 'RDS', 'subs': [{'name': 'MySQL', 'subs': ['Primary', 'Read Replica']}, {'name': 'Aurora', 'subs': []}]}
             ],
             'Google Cloud': [
-                {'name': 'Compute Engine', 'subs': ['VM Instances', 'Disks', 'Images']},
-                {'name': 'Cloud Storage', 'subs': ['Multi-Regional', 'Regional', 'Nearline']},
-                {'name': 'Kubernetes Engine', 'subs': ['Cluster Management', 'API Server']}
+                {'name': 'Compute Engine', 'subs': [{'name': 'VM Instances', 'subs': ['Preemptible', 'Standard']}, {'name': 'Disks', 'subs': []}]},
+                {'name': 'Kubernetes Engine', 'subs': [{'name': 'Cluster Management', 'subs': ['Control Plane', 'Nodes']}]}
             ],
             'Microsoft Azure': [
-                {'name': 'Virtual Machines', 'subs': ['Windows VMs', 'Linux VMs']},
-                {'name': 'Azure SQL Database', 'subs': ['Database Engine', 'Connectivity']},
-                {'name': 'Blob Storage', 'subs': []}
+                {'name': 'Virtual Machines', 'subs': [{'name': 'Windows VMs', 'subs': []}, {'name': 'Linux VMs', 'subs': []}]},
+                {'name': 'Azure SQL Database', 'subs': [{'name': 'Database Engine', 'subs': []}, {'name': 'Connectivity', 'subs': ['Gateway 1', 'Gateway 2']}]}
             ],
-            'Atlassian': [
-                {'name': 'Jira Software', 'subs': ['Issue Tracking', 'Boards', 'Backlog']},
-                {'name': 'Confluence', 'subs': ['Pages', 'Editor', 'Comments']},
-                {'name': 'Bitbucket', 'subs': ['Git over HTTPS', 'Git over SSH', 'Pull Requests']}
+             'Atlassian': [
+                {'name': 'Jira Software', 'subs': [{'name': 'Issue Tracking', 'subs': ['Create', 'View', 'Edit']}, {'name': 'Boards', 'subs': []}]},
+                {'name': 'Confluence', 'subs': [{'name': 'Pages', 'subs': ['Rendering', 'Editing']}, {'name': 'Comments', 'subs': []}]}
             ]
         }
         defaults = [{'name': 'API', 'subs': []}, {'name': 'Dashboard', 'subs': []}, {'name': 'Database', 'subs': ['Read Replicas', 'Write Master']}]

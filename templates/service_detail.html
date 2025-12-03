@@ -66,15 +66,17 @@
             display: block;
         }
         .sub-row {
-            padding: 0.5rem 1rem 0.5rem 2.5rem; /* Indentation */
+            padding: 0.5rem 1rem 0.5rem 2.5rem; 
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid #1e293b;
             position: relative;
+            background-color: #0f172a;
+            cursor: pointer;
         }
-        .sub-row:last-child {
-            border-bottom: none;
+        .sub-row:hover {
+            background-color: #1e293b;
         }
         .sub-row::before {
             content: '';
@@ -86,15 +88,47 @@
             border-left: 1px solid #64748b;
             border-bottom: 1px solid #64748b;
         }
+
+        /* Level 3 Styles */
+        .sub-sub-components {
+            display: none;
+            background-color: #0b1221; /* Even darker for contrast */
+            border-top: 1px solid #1e293b;
+        }
+        .sub-sub-components.open {
+            display: block;
+        }
+        .sub-sub-row {
+            padding: 0.5rem 1rem 0.5rem 4.5rem; /* Deeper Indentation */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1e293b;
+            position: relative;
+            font-size: 0.85em;
+            color: #94a3b8;
+        }
+        .sub-sub-row::before {
+            content: '';
+            position: absolute;
+            left: 3.2rem; /* Align with parent indentation */
+            top: 0;
+            bottom: 50%;
+            width: 10px;
+            border-left: 1px solid #475569;
+            border-bottom: 1px solid #475569;
+        }
+
         .chevron {
             transition: transform 0.2s;
             margin-right: 0.5rem;
             font-size: 0.7rem;
             color: #94a3b8;
         }
-        .component-content.active .chevron {
+        .active > div > .chevron { /* Rotate based on active parent */
             transform: rotate(90deg);
         }
+
         .status-badge {
             font-size: 0.7rem;
             font-weight: 700;
@@ -260,9 +294,9 @@
             <div class="border border-dark-700 rounded overflow-hidden">
                 {% if stats.components %}
                     {% for component in stats.components %}
-                        <!-- Parent Component -->
+                        <!-- Parent Component (Level 1) -->
                         <div class="component-row">
-                            <div class="component-content" onclick="toggleSubComponents(this)">
+                            <div class="component-content {{ 'active' if component.children }}" onclick="toggleChildren(this)">
                                 <div class="flex items-center">
                                     {% if component.children %}
                                         <i class="fas fa-chevron-right chevron"></i>
@@ -281,21 +315,47 @@
                                 {% endif %}
                             </div>
 
-                            <!-- Children Components -->
+                            <!-- Children Components (Level 2) -->
                             {% if component.children %}
                             <div class="sub-components">
                                 {% for child in component.children %}
-                                <div class="sub-row">
-                                    <span class="text-gray-400 text-sm">{{ child.name }}</span>
-                                    
-                                    {% if child.status == 'Operational' %}
-                                        <div class="status-badge status-ok"><i class="fas fa-check-circle"></i> Up</div>
-                                    {% elif child.status == 'Maintenance' %}
-                                        <div class="status-badge status-warn"><i class="fas fa-tools"></i> Maint</div>
-                                    {% else %}
-                                         <div class="status-badge status-err"><i class="fas fa-exclamation-circle"></i> Issue</div>
-                                    {% endif %}
-                                </div>
+                                    <div class="sub-row-wrapper">
+                                        <div class="sub-row {{ 'active' if child.children }}" onclick="toggleChildren(this)">
+                                            <div class="flex items-center">
+                                                {% if child.children %}
+                                                    <i class="fas fa-chevron-right chevron"></i>
+                                                {% endif %}
+                                                <span class="text-gray-400 text-sm">{{ child.name }}</span>
+                                            </div>
+                                            
+                                            {% if child.status == 'Operational' %}
+                                                <div class="status-badge status-ok"><i class="fas fa-check-circle"></i> Up</div>
+                                            {% elif child.status == 'Maintenance' %}
+                                                <div class="status-badge status-warn"><i class="fas fa-tools"></i> Maint</div>
+                                            {% else %}
+                                                <div class="status-badge status-err"><i class="fas fa-exclamation-circle"></i> Issue</div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Grandchildren (Level 3) -->
+                                        {% if child.children %}
+                                        <div class="sub-sub-components">
+                                            {% for grandchild in child.children %}
+                                            <div class="sub-sub-row">
+                                                <span class="text-gray-500 text-xs">{{ grandchild.name }}</span>
+                                                
+                                                {% if grandchild.status == 'Operational' %}
+                                                    <div class="status-badge status-ok"><i class="fas fa-check-circle"></i> Up</div>
+                                                {% elif grandchild.status == 'Maintenance' %}
+                                                    <div class="status-badge status-warn"><i class="fas fa-tools"></i> Maint</div>
+                                                {% else %}
+                                                    <div class="status-badge status-err"><i class="fas fa-exclamation-circle"></i> Issue</div>
+                                                {% endif %}
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
                                 {% endfor %}
                             </div>
                             {% endif %}
@@ -321,7 +381,7 @@
             </div>
         </div>
 
-        <!-- Latest Incidents (Restored) -->
+        <!-- Latest Incidents -->
         <div class="card p-6 mt-6">
             <h3 class="text-lg font-bold text-white mb-4">Latest Incidents</h3>
             <div class="overflow-x-auto rounded-lg border border-dark-700">
@@ -367,12 +427,13 @@
 
     <!-- Scripts -->
     <script>
-        // Toggle Tree View
-        function toggleSubComponents(element) {
-            const row = element.parentElement;
-            const subContainer = row.querySelector('.sub-components');
-            if (subContainer) {
-                subContainer.classList.toggle('open');
+        // Generic Toggle Function for Tree View
+        function toggleChildren(element) {
+            // Find the next sibling which is the container (sub-components or sub-sub-components)
+            const container = element.nextElementSibling; 
+            
+            if (container && (container.classList.contains('sub-components') || container.classList.contains('sub-sub-components'))) {
+                container.classList.toggle('open');
                 element.classList.toggle('active');
             }
         }
