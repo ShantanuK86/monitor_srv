@@ -25,6 +25,8 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Date Adapter for Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -36,6 +38,12 @@
         ::-webkit-scrollbar-track { background: #0d1117; }
         ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Sub-service Modal Animation */
+        .modal { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal.active { opacity: 1; visibility: visible; }
+        .modal-content { transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal.active .modal-content { transform: scale(1); }
     </style>
 </head>
 <body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col pt-24 pb-10 px-4">
@@ -127,37 +135,35 @@
             <button onclick="applyFilters()" class="ml-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-md">Apply Filters</button>
         </div>
 
-        <!-- Global KPIs (Simplified Layout) -->
+        <!-- Global KPIs (Simple Style) -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <!-- Total Incidents -->
             <div class="bg-dark-800 border border-dark-700 rounded-xl p-6">
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-gray-400 font-medium text-sm">Total Incidents</h3>
+                    <h3 class="text-gray-400 font-medium text-sm">Total Alerts</h3>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-green-400">
                         <i class="fas fa-arrow-up mr-1"></i> +12%
                     </span>
                 </div>
                 <div class="text-3xl font-bold text-white mb-2" id="kpiTotal">0</div>
-                <div class="text-xs text-gray-500">Trending up this month</div>
             </div>
 
             <!-- Open Issues -->
             <div class="bg-dark-800 border border-dark-700 rounded-xl p-6">
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-gray-400 font-medium text-sm">Open Issues</h3>
+                    <h3 class="text-gray-400 font-medium text-sm">Current Open</h3>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-red-400">
-                        <i class="fas fa-arrow-up mr-1"></i> +5%
+                        <i class="fas fa-exclamation-circle mr-1"></i> Active
                     </span>
                 </div>
                 <div class="text-3xl font-bold text-white mb-2" id="kpiOpen">0</div>
-                <div class="text-xs text-gray-500">Down 20% this period</div>
             </div>
 
             <!-- Stage Breakdown -->
             <div class="bg-dark-800 border border-dark-700 rounded-xl p-6">
                 <div class="flex justify-between items-start mb-2">
                     <h3 class="text-gray-400 font-medium text-sm">Stage Breakdown</h3>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-white">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-blue-400">
                         <i class="fas fa-server mr-1"></i> Env
                     </span>
                 </div>
@@ -173,22 +179,21 @@
                 </div>
             </div>
 
-            <!-- Closed Issues -->
+            <!-- In Progress Issues -->
             <div class="bg-dark-800 border border-dark-700 rounded-xl p-6">
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-gray-400 font-medium text-sm">Closed Issues</h3>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-white">
-                        <i class="fas fa-check mr-1"></i> +4.5%
+                    <h3 class="text-gray-400 font-medium text-sm">In Progress</h3>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-900 border border-dark-600 text-yellow-400">
+                        <i class="fas fa-tools mr-1"></i> Active
                     </span>
                 </div>
-                <div class="text-3xl font-bold text-white mb-2" id="kpiClosed">0</div>
-                <div class="text-xs text-gray-500">Steady performance</div>
+                <div class="text-3xl font-bold text-white mb-2" id="kpiInProgress">0</div>
             </div>
         </div>
 
         <!-- Trend Chart -->
         <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 mb-8">
-            <h2 class="text-lg font-bold text-white mb-4">Total Incidents by Service</h2>
+            <h2 class="text-lg font-bold text-white mb-4">Alerts Over Time</h2>
             <div class="w-full h-72">
                 <canvas id="trendChart"></canvas>
             </div>
@@ -216,27 +221,49 @@
         {% endif %}
     </div>
 
+    <!-- Sub-service Modal -->
+    <div id="subServiceModal" class="modal fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="modal-content bg-dark-800 border border-dark-700 rounded-xl w-full max-w-lg shadow-2xl relative overflow-hidden">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-white" id="modalTitle">Service Details</h3>
+                    <button onclick="closeSubServiceModal()" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-3 max-h-[60vh] overflow-y-auto" id="subServiceList">
+                    <!-- Sub-services injected here -->
+                </div>
+            </div>
+            <div class="bg-dark-900 p-4 border-t border-dark-700 text-right">
+                <button onclick="closeSubServiceModal()" class="px-4 py-2 bg-dark-700 text-white text-sm font-medium rounded hover:bg-dark-600 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
     {% if records %}
     <script>
         const rawData = {{ records | tojson }};
         let chartInstance = null;
-        let currentChartView = 'daily'; // Default view (Kept variable but not used in new bar logic)
 
-        // Initialize Flatpickr
+        // Initialize Flatpickr with Time Picker
         const fp = flatpickr("#dateRange", { 
             mode: "range", 
-            dateFormat: "Y-m-d", 
+            dateFormat: "Y-m-d H:i", 
+            enableTime: true,
+            time_24hr: true,
             theme: "dark",
-            defaultDate: [new Date().setDate(new Date().getDate() - 30), new Date()], // Default last 30 days
+            defaultDate: [new Date().setDate(new Date().getDate() - 30), new Date()],
             onChange: function() {
-                // Optional: Auto apply if desired, currently button triggered
+                // Optional: Auto apply if desired
             }
         });
 
         // --- Pagination State ---
         let currentPage = 1;
         const itemsPerPage = 8;
-        let currentFilteredGroups = []; // Holds the keys (service names) after filtering
+        let currentFilteredGroups = []; 
 
         function applyFilters() {
             const dateRange = document.getElementById('dateRange')._flatpickr.selectedDates;
@@ -246,12 +273,10 @@
             const searchVal = document.getElementById('searchInput').value.toLowerCase();
 
             const filtered = rawData.filter(row => {
-                // Date Filter (Using creationtime for "when it happened")
+                // Date Filter
                 if (dateRange.length === 2) {
                     const d = new Date(row.creationtime);
-                    const start = new Date(dateRange[0].setHours(0,0,0,0));
-                    const end = new Date(dateRange[1].setHours(23,59,59,999));
-                    if (d < start || d > end) return false;
+                    if (d < dateRange[0] || d > dateRange[1]) return false;
                 }
                 
                 // Dropdowns
@@ -265,85 +290,89 @@
                 return true;
             });
 
-            // Reset page when filtering
             currentPage = 1;
             updateDashboard(filtered);
         }
 
         function updateDashboard(data) {
-            // 1. Update Global KPIs
-            const total = data.length;
-            const open = data.filter(r => r.state === 'open').length;
-            const closed = data.filter(r => r.state === 'closed').length;
-            const prod = data.filter(r => r.stage === 'prd').length;
-            const stg = data.filter(r => r.stage === 'stg').length;
-
-            animateValue("kpiTotal", parseInt(document.getElementById("kpiTotal").innerText), total, 500);
-            animateValue("kpiOpen", parseInt(document.getElementById("kpiOpen").innerText), open, 500);
-            animateValue("kpiClosed", parseInt(document.getElementById("kpiClosed").innerText), closed, 500);
-            
-            // Stage KPI
-            document.getElementById("kpiProd").innerText = prod;
-            document.getElementById("kpiStg").innerText = stg;
-            const prodPct = total > 0 ? (prod / total) * 100 : 0;
-            document.getElementById("kpiStageBar").style.width = `${prodPct}%`;
-
-            // 2. Update Chart (Incident Count per Service)
-            updateChart(data);
-
-            // 3. Grouping and Trend Logic
-            const groups = {};
+            const serviceGroups = {};
             const now = new Date();
             const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(now.getDate() - 7);
             const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(now.getDate() - 30);
 
+            let totalAlerts = 0;
+            let prdAlerts = 0;
+            let stgAlerts = 0;
+
             data.forEach(r => {
+                totalAlerts++;
+                if (r.stage === 'prd') prdAlerts++;
+                if (r.stage === 'stg') stgAlerts++;
+
                 const svcName = r.services;
-                if (!groups[svcName]) {
-                    groups[svcName] = { 
-                        total: 0, open: 0, inprogress: 0, closed: 0, lastReport: null, lastStatus: 'Unknown',
+                if (!serviceGroups[svcName]) {
+                    serviceGroups[svcName] = { 
+                        total: 0, 
+                        latestRecord: null,
+                        alertsOpen: 0,
+                        alertsClosed: 0,
                         trend7: Array(7).fill(0),
                         trend30: Array(30).fill(0)
                     };
                 }
-                const g = groups[svcName];
+                const g = serviceGroups[svcName];
                 g.total++;
-                if (r.state === 'open') g.open++;
-                if (r.state === 'inprogress') g.inprogress++;
-                if (r.state === 'closed') g.closed++;
+                if (r.state === 'open') g.alertsOpen++;
+                if (r.state === 'closed') g.alertsClosed++;
 
-                const creationDate = new Date(r.creationtime);
-                
-                // Calculate 7-day trend (by day index 0-6)
-                if (creationDate >= sevenDaysAgo && creationDate <= now) {
-                    const dayDiff = Math.floor((now - creationDate) / (1000 * 60 * 60 * 24));
-                    if (dayDiff >= 0 && dayDiff < 7) {
-                        g.trend7[6 - dayDiff]++; // Fill from right (today) to left
-                    }
-                }
-                
-                // Calculate 30-day trend (by day index 0-29)
-                if (creationDate >= thirtyDaysAgo && creationDate <= now) {
-                    const dayDiff = Math.floor((now - creationDate) / (1000 * 60 * 60 * 24));
-                    if (dayDiff >= 0 && dayDiff < 30) {
-                        g.trend30[29 - dayDiff]++;
-                    }
-                }
-
-                // Track Latest Report Logic
+                // Track Latest Report
                 if (r.recentreporttime) {
                     const d = new Date(r.recentreporttime);
-                    if (!g.lastReport || d > g.lastReport) {
-                        g.lastReport = d;
-                        g.lastStatus = r.state; 
+                    if (!g.latestRecord || d > new Date(g.latestRecord.recentreporttime)) {
+                        g.latestRecord = r;
                     }
+                }
+
+                // Trend Calc
+                const creationDate = new Date(r.creationtime);
+                if (creationDate >= sevenDaysAgo && creationDate <= now) {
+                    const dayDiff = Math.floor((now - creationDate) / (1000 * 60 * 60 * 24));
+                    if (dayDiff >= 0 && dayDiff < 7) g.trend7[6 - dayDiff]++;
+                }
+                if (creationDate >= thirtyDaysAgo && creationDate <= now) {
+                    const dayDiff = Math.floor((now - creationDate) / (1000 * 60 * 60 * 24));
+                    if (dayDiff >= 0 && dayDiff < 30) g.trend30[29 - dayDiff]++;
                 }
             });
 
-            // Store for pagination
-            currentFilteredGroups = Object.keys(groups).sort().map(key => ({
+            // Calculate Service-Level KPIs
+            let servicesOpen = 0;
+            let servicesInProgress = 0;
+            let servicesClosed = 0;
+
+            Object.values(serviceGroups).forEach(g => {
+                if (g.latestRecord) {
+                    if (g.latestRecord.state === 'open') servicesOpen++;
+                    else if (g.latestRecord.state === 'inprogress') servicesInProgress++;
+                    else if (g.latestRecord.state === 'closed') servicesClosed++;
+                }
+            });
+
+            animateValue("kpiTotal", parseInt(document.getElementById("kpiTotal").innerText), totalAlerts, 500);
+            animateValue("kpiOpen", parseInt(document.getElementById("kpiOpen").innerText), servicesOpen, 500); 
+            animateValue("kpiInProgress", parseInt(document.getElementById("kpiInProgress").innerText), servicesInProgress, 500); 
+            animateValue("kpiClosed", parseInt(document.getElementById("kpiClosed").innerText), servicesClosed, 500);
+
+            document.getElementById("kpiProd").innerText = prdAlerts;
+            document.getElementById("kpiStg").innerText = stgAlerts;
+            const prodPct = totalAlerts > 0 ? (prdAlerts / totalAlerts) * 100 : 0;
+            document.getElementById("kpiStageBar").style.width = `${prodPct}%`;
+
+            updateChart(data);
+
+            currentFilteredGroups = Object.keys(serviceGroups).sort().map(key => ({
                 name: key,
-                stats: groups[key]
+                stats: serviceGroups[key]
             }));
 
             renderPage();
@@ -359,7 +388,6 @@
                 return;
             }
 
-            // Calculate Slice
             const totalPages = Math.ceil(currentFilteredGroups.length / itemsPerPage);
             if (currentPage > totalPages) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
@@ -371,25 +399,31 @@
             pageItems.forEach(item => {
                 const svc = item.name;
                 const s = item.stats;
-                const lastStr = s.lastReport ? s.lastReport.toLocaleDateString() + ' ' + s.lastReport.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+                const latest = s.latestRecord;
+                
+                let lastStr = 'N/A';
+                let currentState = 'Unknown';
+                if (latest) {
+                    const d = new Date(latest.recentreporttime);
+                    lastStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    currentState = latest.state;
+                }
                 
                 let borderColor = 'border-dark-700';
-                if (s.open > 0) borderColor = 'border-red-500/50';
-                else if (s.inprogress > 0) borderColor = 'border-yellow-500/50';
+                if (currentState === 'open') borderColor = 'border-red-500/50';
+                else if (currentState === 'inprogress') borderColor = 'border-yellow-500/50';
 
-                // Generate dynamic sparklines
                 const sparkline7Path = generateSparklinePath(s.trend7, 100, 25);
-                // For 30 days, we aggregate slightly to smooth it or just plot all 30 points
-                // Simple aggregation: group every 3 days into 1 point for smoothness
                 const aggregated30 = aggregateData(s.trend30, 10);
                 const sparkline30Path = generateSparklinePath(aggregated30, 100, 25);
 
                 const html = `
-                <div class="bg-dark-800 border ${borderColor} rounded-xl p-5 hover:bg-dark-700/50 transition-all shadow-sm group">
+                <div class="bg-dark-800 border ${borderColor} rounded-xl p-5 hover:bg-dark-700/50 transition-all shadow-sm group cursor-pointer" onclick="openSubServiceModal('${svc}')">
                     <div class="flex justify-between items-start mb-4">
                         <div class="text-right w-full">
                             <h3 class="font-bold text-white text-md truncate w-full" title="${svc}">${svc}</h3>
-                            <p class="text-[10px] text-gray-500">Updated: ${lastStr}</p>
+                            <p class="text-[10px] text-gray-500">Last Report: ${lastStr}</p>
+                            <span class="text-[10px] uppercase font-bold tracking-wider ${currentState === 'open' ? 'text-red-400' : (currentState === 'inprogress' ? 'text-yellow-400' : 'text-green-400')}">${currentState}</span>
                         </div>
                     </div>
                     
@@ -415,43 +449,28 @@
                         </div>
                         <div class="bg-dark-900 rounded p-1">
                             <div class="text-[10px] text-gray-500">Open</div>
-                            <div class="text-md font-bold ${s.open > 0 ? 'text-red-400' : 'text-white'}">${s.open}</div>
+                            <div class="text-md font-bold ${s.alertsOpen > 0 ? 'text-red-400' : 'text-white'}">${s.alertsOpen}</div>
                         </div>
                         <div class="bg-dark-900 rounded p-1">
                             <div class="text-[10px] text-gray-500">Closed</div>
-                            <div class="text-md font-bold text-green-400">${s.closed}</div>
+                            <div class="text-md font-bold text-green-400">${s.alertsClosed}</div>
                         </div>
                     </div>
                 </div>`;
                 container.insertAdjacentHTML('beforeend', html);
             });
 
-            // Update Pagination UI
             document.getElementById('paginationControls').style.display = 'flex';
             document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
             document.getElementById('prevBtn').disabled = currentPage === 1;
             document.getElementById('nextBtn').disabled = currentPage === totalPages;
         }
 
-        function prevPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                renderPage();
-            }
-        }
-
-        function nextPage() {
-            const totalPages = Math.ceil(currentFilteredGroups.length / itemsPerPage);
-            if (currentPage < totalPages) {
-                currentPage++;
-                renderPage();
-            }
-        }
+        function prevPage() { if (currentPage > 1) { currentPage--; renderPage(); } }
+        function nextPage() { if (currentPage < Math.ceil(currentFilteredGroups.length / itemsPerPage)) { currentPage++; renderPage(); } }
 
         function updateChart(data) {
             const ctx = document.getElementById('trendChart').getContext('2d');
-            
-            // Calculate incidents per service and time to close
             const serviceData = {};
             
             data.forEach(r => {
@@ -460,22 +479,17 @@
                 }
                 serviceData[r.services].count++;
                 
-                // Sample Logic for Time to Close (Assuming 'timetoclosedinminute' column or calculation)
-                // For now using mock calculation based on creationtime vs recentreporttime if closed
                 if (r.state === 'closed' && r.recentreporttime && r.creationtime) {
                     const start = new Date(r.creationtime);
                     const end = new Date(r.recentreporttime);
                     const diffMins = Math.max(0, Math.round((end - start) / 60000));
                     serviceData[r.services].timeToClose.push(diffMins);
                 } else if (r.timetoclosedinminute) {
-                     // If explicit column exists (future proofing as requested)
                      serviceData[r.services].timeToClose.push(parseInt(r.timetoclosedinminute) || 0);
                 }
             });
 
-            // Sort by count descending
             const sortedServices = Object.keys(serviceData).sort((a,b) => serviceData[b].count - serviceData[a].count);
-            // Take top 20
             const topServices = sortedServices.slice(0, 20);
             
             const labels = topServices;
@@ -505,7 +519,7 @@
                         {
                             label: 'Avg Time to Close (min)',
                             data: avgTimeClose,
-                            backgroundColor: '#10b981', // Green for time
+                            backgroundColor: '#10b981',
                             borderRadius: 4,
                             barThickness: 'flex',
                             maxBarThickness: 30,
@@ -516,10 +530,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
+                    interaction: { mode: 'index', intersect: false },
                     plugins: { 
                         legend: { position: 'top', labels: { color: '#9ca3af' } }, 
                         tooltip: { backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1 } 
@@ -539,7 +550,7 @@
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            grid: { drawOnChartArea: false }, // only want the grid lines for one axis to show up
+                            grid: { drawOnChartArea: false },
                             ticks: { color: '#94a3b8' },
                             title: { display: true, text: 'Avg Time (min)', color: '#10b981' }
                         },
@@ -566,12 +577,10 @@
             }, Math.max(stepTime, 10));
         }
 
-        // --- Sparkline Helpers ---
         function generateSparklinePath(data, width, height) {
             if (data.length === 0) return "";
             const maxVal = Math.max(...data, 1); 
             const stepX = width / (data.length - 1);
-            
             let path = `M0 ${height - (data[0] / maxVal * height)}`;
             for (let i = 1; i < data.length; i++) {
                 const x = i * stepX;
@@ -592,7 +601,65 @@
             return aggregated;
         }
 
-        // Trigger initial load
+        // --- SUB SERVICE MODAL LOGIC ---
+        const subServiceModal = document.getElementById('subServiceModal');
+        
+        function openSubServiceModal(serviceName) {
+            document.getElementById('modalTitle').innerText = `${serviceName} - Sub-Services`;
+            const listContainer = document.getElementById('subServiceList');
+            listContainer.innerHTML = '';
+
+            // Dummy Sub-services (Generic generation for demo)
+            // In a real app, you'd filter your 'rawData' for 'component' field if it existed
+            const subServices = [
+                { name: 'API Gateway', status: 'Operational', icon: 'fas fa-network-wired' },
+                { name: 'Database Cluster', status: 'Operational', icon: 'fas fa-database' },
+                { name: 'Web Front-end', status: 'Operational', icon: 'fas fa-laptop-code' },
+                { name: 'Background Workers', status: 'Maintenance', icon: 'fas fa-cogs' },
+                { name: 'CDN', status: 'Operational', icon: 'fas fa-globe' }
+            ];
+
+            subServices.forEach((sub, idx) => {
+                // Randomize status slightly based on parent index for variety
+                let statusClass = 'text-green-400 bg-green-900/20 border-green-900/40';
+                if (sub.status === 'Maintenance') statusClass = 'text-blue-400 bg-blue-900/20 border-blue-900/40';
+                
+                // Override for demo variety
+                if (idx === 3 && Math.random() > 0.5) {
+                     sub.status = 'Degraded Performance';
+                     statusClass = 'text-yellow-400 bg-yellow-900/20 border-yellow-900/40';
+                }
+
+                const itemHTML = `
+                <div class="flex items-center justify-between p-3 bg-dark-900 rounded-lg border border-dark-700 hover:bg-dark-700 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded bg-dark-800 flex items-center justify-center text-gray-400">
+                            <i class="${sub.icon}"></i>
+                        </div>
+                        <span class="text-gray-200 font-medium text-sm">${serviceName} ${sub.name} ${idx+1}</span>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 rounded border ${statusClass}">
+                        ${sub.status}
+                    </span>
+                </div>
+                `;
+                listContainer.insertAdjacentHTML('beforeend', itemHTML);
+            });
+
+            subServiceModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeSubServiceModal() {
+            subServiceModal.classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close on outside click
+        subServiceModal.addEventListener('click', (e) => {
+            if (e.target === subServiceModal) closeSubServiceModal();
+        });
+
         applyFilters();
     </script>
     {% endif %}
