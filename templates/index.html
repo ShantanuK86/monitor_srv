@@ -37,6 +37,50 @@
         .custom-option { padding: 0.5rem 1rem; font-size: 0.875rem; color: #c9d1d9; cursor: pointer; transition: background 0.2s; }
         .custom-option:hover { background: #21262d; color: #fff; }
         .custom-option.selected { background: #21262d; color: #58a6ff; }
+
+        .service-card { 
+            transition: all 0.2s ease-in-out; 
+            margin-bottom: 20px; 
+            border: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .service-card:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Status Dots */
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-ok { background-color: #28a745; box-shadow: 0 0 5px #28a745; }
+        .status-minor { background-color: #ffc107; }
+        .status-major { background-color: #dc3545; box-shadow: 0 0 5px #dc3545;}
+        .status-maintenance { background-color: #17a2b8; }
+        .status-unavailable { background-color: #6c757d; }
+
+        /* --- NEW CAROUSEL STYLING --- */
+        #newsCarousel {
+            background: linear-gradient(to right, #ffffff, #f8f9fa);
+            border-left: 5px solid #0d6efd; /* Blue accent bar on left */
+            border-radius: 4px;
+        }
+        .news-badge {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-right: 10px;
+        }
+        .news-source {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-style: italic;
+        }
+        /* Fix height to prevent page jumping when sliding */
+        .carousel-item {
+            min-height: 80px; 
+        }
+        .carousel-content-wrapper {
+            padding: 15px;
+        }
     </style>
 </head>
 <body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col items-center pt-24 pb-10 px-4">
@@ -173,8 +217,93 @@
             <iframe id="modalIframe" src="" class="w-full h-full border-0" title="Service Details"></iframe>
         </div>
     </div>
+    <!-- Google News Dynamic RSS Info Section -->
+    <div class="w-full max-w-4xl mx-auto mt-10 mb-4 p-4 rounded-md bg-dark-800 border border-dark-700">
+        <h3 class="text-white font-bold text-md mb-2 flex items-center gap-2">
+            <i class="fas fa-bolt text-yellow-400"></i>
+            Google News Dynamic RSS (Live Outage Signals)
+        </h3>
+
+        <p class="text-gray-400 text-sm leading-relaxed">
+            Instead of relying only on official status pages, this dashboard also scans 
+            <span class="text-blue-400 font-semibold">Google News RSS</span> for fresh articles like 
+            “AWS outage”, “GitHub down”, or “Cloudflare issues”.  
+            Tech media (TechCrunch, The Verge, BleepingComputer) often report outages 
+            <span class="font-semibold text-green-400">minutes before</span> official pages update.  
+            This feed automatically refreshes every few minutes.  
+            <span class="text-gray-500 italic">Cost: Free.</span>
+        </p>
+    </div>
+    <!-- Google News Live Carousel -->
+    <div class="w-full max-w-4xl mx-auto mt-4">
+        <div id="newsTicker"
+            class="relative w-full bg-dark-800 border border-dark-700 rounded-lg overflow-hidden">
+
+            <!-- Slides -->
+            <div id="newsSlides" class="whitespace-nowrap transition-transform duration-500">
+                {% if news %}
+                    {% for item in news %}
+                    <div class="inline-block w-full px-4 py-4 align-middle">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-xs text-gray-400 mb-1">
+                                    <span class="text-blue-400 font-semibold">{{ item.service }}</span> • 
+                                    {{ item.time }} • 
+                                    <span class="italic">{{ item.source }}</span>
+                                </div>
+
+                                <a href="{{ item.link }}" target="_blank"
+                                class="text-gray-200 text-sm font-semibold hover:text-blue-400 transition block text-left">
+                                    {{ item.title }}
+                                    <i class="fas fa-external-link-alt ml-1 text-xs opacity-50"></i>
+                                </a>
+                            </div>
+                            <i class="fas fa-newspaper text-gray-500 opacity-30 text-xl"></i>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="inline-block w-full px-4 py-4 text-center text-gray-400">
+                        <i class="fas fa-spinner fa-spin mr-2"></i> Initializing News Feed...
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Controls -->
+            <button onclick="prevNews()" class="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600 transition">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+
+            <button onclick="nextNews()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600 transition">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
 
     <script>
+        let currentSlide = 0;
+        let totalSlides = {{ news|length if news else 1 }};
+        const slideWidth = 100; // percent
+
+        function updateSlide() {
+            const slides = document.getElementById('newsSlides');
+            slides.style.transform = `translateX(-${currentSlide * slideWidth}%)`;
+        }
+
+        function nextNews() {
+            currentSlide = (currentSlide + 1) % totalSlides;
+            updateSlide();
+        }
+
+        function prevNews() {
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            updateSlide();
+        }
+
+        // Auto-slide every 5 seconds
+        setInterval(nextNews, 5000);
+
         function toggleIncidents() {
             const dropdown = document.getElementById('incidentDropdown');
             const chevron = document.getElementById('incidentChevron');

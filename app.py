@@ -11,7 +11,7 @@ from io import BytesIO
 import threading
 import os
 import json
-
+import feedparser
 app = Flask(__name__)
 app.secret_key = 'supersecretkey' # Required for flashing messages
 
@@ -626,6 +626,105 @@ def update_hardware_row():
     except Exception as e:
         print(e)
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+# ==========================================
+# NEWS FEED LOGIC (UPDATED: GOOGLE NEWS AGGREGATOR)
+# ==========================================
+import urllib.parse
+
+def get_google_news_url(query):
+    """Generates a Google News RSS URL for a specific search query within the last 24 hours."""
+    base_url = "https://news.google.com/rss/search"
+    # q={query}+when:1d (Restricts to last 1 day) + hl=en-US (Language)
+    encoded_query = urllib.parse.quote(f"{query} outage when:1d")
+    return f"{base_url}?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+
+# We define the services we want to "search" for news about
+MONITORED_TOPICS = [
+    "Cloudflare",
+    "Amazon Web Services",
+    "Azure",
+    "Google Cloud",
+    "GitHub",
+    "Slack",
+    "Docker",
+    "Atlassian"
+]
+
+def update_news_feed():
+    """Fetches dynamic news from Google News based on search queries."""
+    global LATEST_NEWS
+    print("Fetching Aggregated News...")
+    news_items = []
+    
+    # helper to avoid duplicates across different searches
+    seen_links = set()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Create a dictionary of {Future: ServiceName}
+        future_to_service = {
+            executor.submit(feedparser.parse, get_google_news_url(service)): service 
+            for service in MONITORED_TOPICS
+        }
+        
+        for future in concurrent.futures.as_completed(future_to_service):
+            service_name = future_to_service[future]
+            try:
+                feed = future.result()
+                # Get top 2 entries per topic
+                for entry in feed.entries[:2]:
+                    # Filter: Only show if title looks like an outage/incident report
+                    # This reduces noise (e.g., "AWS announces new feature")
+                    keywords = ['down', 'outage', 'issue', 'slow', 'error', 'incident', 'fail', 'crash']
+                    if any(k in entry.title.lower() for k in keywords):
+                        if entry.link not in seen_links:
+                            
+                            # Parse time
+                            timestamp = None
+                            pub_date_str = "Recent"
+                            if hasattr(entry, 'published_parsed'):
+                                timestamp = entry.published_parsed
+                                # Convert to local readable time
+                                pub_date_str = time.strftime("%H:%M %p, %b %d", entry.published_parsed)
+
+                            news_items.append({
+                                'service': service_name,
+                                'title': entry.title,
+                                'link': entry.link,
+                                'time': pub_date_str,
+                                'sort_key': timestamp if timestamp else time.localtime(0),
+                                'source': entry.source.title if hasattr(entry, 'source') else "Google News"
+                            })
+                            seen_links.add(entry.link)
+            except Exception as e:
+                print(f"Error fetching news for {service_name}: {e}")
+
+    # If list is empty (good news! no outages), add a placeholder
+    if not news_items:
+        news_items.append({
+            'service': 'System',
+            'title': 'No major outages detected in news streams for the last 24h.',
+            'link': '#',
+            'time': datetime.now().strftime("%H:%M"),
+            'sort_key': time.localtime(),
+            'source': 'Monitor'
+        })
+
+    # Sort by newest first
+    news_items.sort(key=lambda x: x['sort_key'], reverse=True)
+    LATEST_NEWS = news_items[:20] 
+    print("News Feed Updated.")
+
+def news_scheduler():
+    """Background thread to update news every 15 minutes."""
+    update_news_feed()
+    while True:
+        time.sleep(900) # 15 minutes
+        update_news_feed()
+
+threading.Thread(target=news_scheduler, daemon=True).start()
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
