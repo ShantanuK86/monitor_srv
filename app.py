@@ -15,6 +15,15 @@ import feedparser
 app = Flask(__name__)
 app.secret_key = 'supersecretkey' # Required for flashing messages
 
+
+# Add these imports to the top of app.py
+#   pip install selenium python-pptx webdriver-manager
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from pptx import Presentation
+from pptx.util import Inches
 # Global storage for the daily report
 DAILY_LOG = []
 
@@ -627,6 +636,70 @@ def update_hardware_row():
         print(e)
         return jsonify({"success": False, "message": str(e)}), 500
 
+# download pptx
+@app.route('/download_ppt_snapshot')
+def download_ppt_snapshot():
+    """
+    Launches a headless browser, snapshots the Monitoring page, 
+    and returns a PPTX file.
+    """
+    # 1. SETUP: Define the URL to snapshot
+    # We use url_for with _external=True to get the absolute URL (e.g., http://localhost:5000/monitoring)
+    target_url = url_for('monitoring', _external=True)
+    
+    # 2. CONFIGURE SELENIUM (HEADLESS)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless") 
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--hide-scrollbars")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    
+    ppt_stream = BytesIO() # Create file in memory
+
+    try:
+        print(f"Snapshotting URL: {target_url}")
+        
+        # 3. CAPTURE SCREENSHOT
+        driver.get(target_url)
+        time.sleep(3) # Wait for Chart.js and Tailwind animations
+        
+        # Capture screenshot as binary data
+        screenshot = driver.get_screenshot_as_png()
+        screenshot_stream = BytesIO(screenshot)
+
+        # 4. CREATE POWERPOINT
+        prs = Presentation()
+        # Layout 6 is usually a blank slide
+        blank_slide_layout = prs.slide_layouts[6] 
+        slide = prs.slides.add_slide(blank_slide_layout)
+
+        # 5. INSERT IMAGE
+        # Center the image on the slide (Standard 16:9 slide is 10x5.625 inches)
+        left = Inches(0.5)
+        top = Inches(0.5)
+        width = Inches(9)
+        slide.shapes.add_picture(screenshot_stream, left, top, width=width)
+
+        # 6. SAVE TO MEMORY
+        prs.save(ppt_stream)
+        ppt_stream.seek(0)
+
+    except Exception as e:
+        print(f"Error generating PPT: {e}")
+        return f"Error generating presentation: {str(e)}", 500
+    finally:
+        driver.quit()
+
+    # 7. SEND FILE TO USER
+    return send_file(
+        ppt_stream,
+        as_attachment=True,
+        download_name=f'Monitoring_Snapshot_{datetime.now().strftime("%Y%m%d_%H%M")}.pptx',
+        mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    )
 
 # ==========================================
 # NEWS FEED LOGIC (UPDATED: GOOGLE NEWS AGGREGATOR)
