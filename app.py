@@ -14,7 +14,9 @@ import json
 import feedparser
 app = Flask(__name__)
 app.secret_key = 'supersecretkey' # Required for flashing messages
-
+# for news feed
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 
 # Add these imports to the top of app.py
 # #   pip install selenium python-pptx webdriver-manager
@@ -312,9 +314,115 @@ def generate_excel_file():
     output.seek(0)
     filename = f"Status_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return output, filename
+MONITORED_TOPICS = [s.name for s in SERVICES] + ["OpenAI", "Discord"]
+print("Monitored Topics for News:", MONITORED_TOPICS)
+def get_google_news_url(query):
+    # Construct RSS URL for Google News Search
+    # "when:1d" filters for last 24 hours
+    return f"https://news.google.com/rss/search?q={query}+outage+OR+down+when:1d&hl=en-US&gl=US&ceid=US:en"
+
+def fetch_and_parse_feed(service_name):
+    """
+    Fetches RSS via Requests and parses with ElementTree.
+    Replaces the old feedparser logic.
+    """
+    url = get_google_news_url(service_name)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    found_items = []
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Parse XML directly
+        root = ET.fromstring(response.content)
+        
+        # Iterate over items (Limit 2 per service to avoid spam)
+        # Google News RSS structure: <rss><channel><item>...</item></channel></rss>
+        for item in root.findall('./channel/item')[:2]:
+            title = item.find('title').text
+            link = item.find('link').text
+            pub_date_str = item.find('pubDate').text
+            
+            # Extract Source if available (Google often puts it in <source>)
+            source_elem = item.find('source')
+            source = source_elem.text if source_elem is not None else "Google News"
+
+            # Filter Logic (Optional extra safety check)
+            keywords = ['down', 'outage', 'issue', 'error', 'incident', 'fail', 'crash', 'slow']
+            if any(k in title.lower() for k in keywords):
+                
+                # Parse Date
+                try:
+                    # RFC 2822 parsing
+                    dt_object = parsedate_to_datetime(pub_date_str)
+                    display_time = dt_object.strftime("%H:%M %p, %b %d")
+                    sort_key = dt_object.timestamp()
+                except:
+                    display_time = "Recent"
+                    sort_key = time.time()
+
+                found_items.append({
+                    "service": service_name,
+                    "title": title,
+                    "link": link,
+                    "time": display_time,
+                    "sort_key": sort_key,
+                    "source": source
+                })
+                
+    except Exception as e:
+        print(f"❌ Error fetching news for {service_name}: {e}")
+    #print(found_items)
+    return found_items
+
+def update_news_feed():
+    global LATEST_NEWS
+    print("Fetching Aggregated News (Requests/XML)...")
+
+    news_items = []
+    seen_links = set()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_service = {
+            executor.submit(fetch_and_parse_feed, service): service
+            for service in MONITORED_TOPICS
+        }
+
+        for future in concurrent.futures.as_completed(future_to_service):
+            try:
+                items = future.result()
+                for item in items:
+                    if item['link'] not in seen_links:
+                        news_items.append(item)
+                        seen_links.add(item['link'])
+            except Exception as e:
+                print(f"Thread error: {e}")
+
+    # Fallback if no news found
+    if not news_items:
+        print("⚠ No outage news found in the last 24h.")
+        news_items.append({
+            "service": "System",
+            "title": "No outage-related news found in last 24h.",
+            "link": "#",
+            "time": datetime.now().strftime("%H:%M"),
+            "sort_key": time.time(),
+            "source": "Monitor"
+        })
+
+    # Sort by time (newest first) and limit to 20
+    news_items.sort(key=lambda x: x["sort_key"], reverse=True)
+    LATEST_NEWS = news_items[:20]
+    print("News Feed Updated Successfully.")
+
 
 def background_scheduler():
     print("Background Scheduler Started...")
+    update_news_feed()
     while True:
         now = datetime.now()
         if now.hour == 0 and now.minute < 15 and len(DAILY_LOG) > 90:
@@ -336,7 +444,11 @@ def background_scheduler():
             except:
                 snapshot["services"][service.name] = "UNKNOWN"
         DAILY_LOG.append(snapshot)
-        time.sleep(2)
+
+        if now.minute % 15 == 0: # Update news every 15 mins
+            update_news_feed()
+
+        time.sleep(50)
 
 threading.Thread(target=background_scheduler, daemon=True).start()
 
@@ -352,7 +464,7 @@ def index():
         for future in concurrent.futures.as_completed(future_to_service):
             results.append(future.result())
     results.sort(key=lambda x: x['name'])
-    return render_template('index.html', services=results, Status=Status)
+    return render_template('index.html', services=results, Status=Status, news=LATEST_NEWS)
 
 @app.route('/monitoring')
 def monitoring():
@@ -700,82 +812,6 @@ def download_ppt_snapshot():
         download_name=f'Monitoring_Snapshot_{datetime.now().strftime("%Y%m%d_%H%M")}.pptx',
         mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation'
     )
-
-# ==========================================
-# NEWS FEED LOGIC (UPDATED: GOOGLE NEWS AGGREGATOR)
-# ==========================================
-import feedparser
-import urllib.request
-import concurrent.futures, time
-from datetime import datetime
-
-def fetch_with_headers(url):
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0"}
-    )
-    data = urllib.request.urlopen(req, timeout=10).read()
-    return feedparser.parse(data)
-
-def update_news_feed():
-    global LATEST_NEWS
-    print("Fetching Aggregated News...")
-
-    news_items = []
-    seen_links = set()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_service = {
-            executor.submit(fetch_with_headers, get_google_news_url(service)): service
-            for service in MONITORED_TOPICS
-        }
-
-        for future in concurrent.futures.as_completed(future_to_service):
-            service_name = future_to_service[future]
-
-            try:
-                feed = future.result()
-
-                for entry in feed.entries[:2]:
-                    keywords = ['down', 'outage', 'issue', 'error', 'incident', 'fail', 'crash']
-                    if any(k in entry.title.lower() for k in keywords):
-
-                        if entry.link not in seen_links:
-                            timestamp = entry.published_parsed if hasattr(entry, "published_parsed") else None
-                            pub_date_str = (
-                                time.strftime("%H:%M %p, %b %d", timestamp)
-                                if timestamp else "Recent"
-                            )
-
-                            news_items.append({
-                                "service": service_name,
-                                "title": entry.title,
-                                "link": entry.link,
-                                "time": pub_date_str,
-                                "sort_key": timestamp or time.localtime(0),
-                                "source": entry.source.title if hasattr(entry, "source") else "Google News"
-                            })
-                            seen_links.add(entry.link)
-
-            except Exception as e:
-                print(f"❌ Error: {service_name}: {e}")
-
-    if not news_items:
-        print("⚠ No outage news found in the last 24h.")
-        news_items.append({
-            "service": "System",
-            "title": "No outage-related news found in last 24h.",
-            "link": "#",
-            "time": datetime.now().strftime("%H:%M"),
-            "sort_key": time.localtime(),
-            "source": "Monitor"
-        })
-
-    news_items.sort(key=lambda x: x["sort_key"], reverse=True)
-    LATEST_NEWS = news_items[:20]
-
-    print("News Feed Updated Successfully.")
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

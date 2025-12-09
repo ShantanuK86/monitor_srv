@@ -13,7 +13,8 @@
                     colors: {
                         dark: { 900: '#0d1117', 800: '#161b22', 700: '#21262d', 600: '#30363d' },
                         warn: { 900: '#3b2300', 500: '#e3b341', border: '#6e501a' },
-                        success: { 900: 'rgba(46, 160, 67, 0.15)', 500: '#3fb950', border: 'rgba(46, 160, 67, 0.4)' }
+                        success: { 900: 'rgba(46, 160, 67, 0.15)', 500: '#3fb950', border: 'rgba(46, 160, 67, 0.4)' },
+                        accent: { 500: '#58a6ff' }
                     }
                 }
             }
@@ -21,14 +22,18 @@
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        
+        /* Modal & Dropdown Transitions */
         .modal { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal.active { opacity: 1; visibility: visible; }
         .modal-content { transform: scale(0.95); transition: transform 0.3s ease; }
         .modal.active .modal-content { transform: scale(1); }
         #incidentDropdown { transition: max-height 0.3s ease-in-out; max-height: 0; overflow: hidden; }
         #incidentDropdown.open { max-height: 2000px; }
+        
+        /* Custom Select */
         .custom-select-wrapper { position: relative; display: inline-block; }
         .custom-select-trigger { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; color: #c9d1d9; background: #161b22; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; transition: all 0.2s; min-width: 160px; }
         .custom-select-trigger:hover { border-color: #8b949e; }
@@ -38,55 +43,44 @@
         .custom-option:hover { background: #21262d; color: #fff; }
         .custom-option.selected { background: #21262d; color: #58a6ff; }
 
-        .service-card { 
-            transition: all 0.2s ease-in-out; 
-            margin-bottom: 20px; 
-            border: none;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        /* --- CARD & SCROLL STYLING --- */
+        .news-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
-        .service-card:hover { 
-            transform: translateY(-3px); 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        .news-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
         }
-        
-        /* Status Dots */
-        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-        .status-ok { background-color: #28a745; box-shadow: 0 0 5px #28a745; }
-        .status-minor { background-color: #ffc107; }
-        .status-major { background-color: #dc3545; box-shadow: 0 0 5px #dc3545;}
-        .status-maintenance { background-color: #17a2b8; }
-        .status-unavailable { background-color: #6c757d; }
+        .news-image-placeholder {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .news-image-placeholder::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at top right, rgba(88, 166, 255, 0.1), transparent 60%);
+        }
+        .find-out-more i { transition: transform 0.2s ease; }
+        .find-out-more:hover i { transform: translateX(4px); }
 
-        /* --- NEW CAROUSEL STYLING --- */
-        #newsCarousel {
-            background: linear-gradient(to right, #ffffff, #f8f9fa);
-            border-left: 5px solid #0d6efd; /* Blue accent bar on left */
-            border-radius: 4px;
-        }
-        .news-badge {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-right: 10px;
-        }
-        .news-source {
-            font-size: 0.8rem;
-            color: #6c757d;
-            font-style: italic;
-        }
-        /* Fix height to prevent page jumping when sliding */
-        .carousel-item {
-            min-height: 80px; 
-        }
-        .carousel-content-wrapper {
-            padding: 15px;
-        }
+        /* Hide Scrollbar but keep functionality */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Scroll Buttons Fade */
+        .scroll-btn { opacity: 0; transition: opacity 0.3s, background-color 0.2s; }
+        .group\/slider:hover .scroll-btn { opacity: 1; }
     </style>
 </head>
 <body class="bg-dark-900 text-gray-300 min-h-screen flex flex-col items-center pt-24 pb-10 px-4">
 
     <nav class="fixed top-0 left-0 w-full bg-dark-900/95 backdrop-blur-md border-b border-dark-700 z-40">
-        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full border-2 border-green-500 flex items-center justify-center text-green-500 bg-green-500/10"><i class="fas fa-check text-sm"></i></div>
                 <div class="flex flex-col">
@@ -96,15 +90,83 @@
             </div>
             <div class="flex items-center gap-1">
                 <a href="/" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">Services</a>
-                
                 <a href="/monitoring" class="px-4 py-1.5 rounded-full text-gray-400 text-sm font-medium hover:text-white hover:bg-dark-800/50 transition-colors">24*7 Monitoring</a>
                 <a href="/dashboard" class="px-4 py-1.5 rounded-full bg-dark-800 text-white text-sm font-medium border border-dark-700 hover:bg-dark-700 transition-colors">Dashboard</a>
             </div>
         </div>
     </nav>
 
-    <div class="w-full max-w-5xl">
-        {% set ns = namespace(issues=0) %}
+    <div class="w-full max-w-7xl px-4"> {% set ns = namespace(issues=0) %}
+        
+
+        <div class="mt-12 mb-16 max-w-6xl mx-auto">
+            <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+                
+                <div class="lg:w-1/5 pt-4 flex-shrink-0">
+                    <h2 class="text-4xl font-bold text-white leading-tight mb-4">Latest<br>News</h2>
+                    <p class="text-accent-500 font-medium mb-4 uppercase tracking-wide text-sm">Outage Intelligence</p>
+                    <p class="text-gray-400 text-sm leading-relaxed mb-6">
+                        Real-time feed aggregating outage reports for AWS, Azure, Google Cloud, and more.
+                        <br><br>
+                        <span class="text-xs text-gray-500"><i class="fas fa-arrows-alt-h mr-1"></i> Scroll to see more</span>
+                    </p>
+                    <div class="h-1 w-12 bg-accent-500 rounded"></div>
+                </div>
+
+                <div class="lg:w-4/5 relative group/slider">
+                    
+                    <button onclick="scrollNews(-1)" class="scroll-btn absolute -left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-dark-700 border border-dark-600 text-white shadow-xl hover:bg-accent-500 hover:border-accent-500 flex items-center justify-center">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+
+                    <button onclick="scrollNews(1)" class="scroll-btn absolute -right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-dark-700 border border-dark-600 text-white shadow-xl hover:bg-accent-500 hover:border-accent-500 flex items-center justify-center">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+
+                    {% if news and news|length > 0 %}
+                    <div id="newsContainer" class="flex gap-6 overflow-x-auto pb-8 pt-2 px-1 snap-x snap-mandatory scroll-smooth hide-scrollbar">
+                        {% for item in news %} <article class="min-w-[280px] w-[280px] md:min-w-[300px] md:w-[300px] snap-start news-card bg-dark-800 rounded-lg overflow-hidden border border-dark-700 group flex-shrink-0">
+                            <div class="news-image-placeholder h-40 w-full flex items-center justify-center relative">
+                                <span class="absolute top-4 left-4 bg-black/50 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border border-white/10">
+                                    {{ item.service }}
+                                </span>
+                                <i class="fas fa-rss text-6xl text-white/5 absolute -right-4 -bottom-4 transform rotate-12"></i>
+                                <div class="text-center z-10">
+                                    <div class="w-12 h-12 rounded-full bg-dark-900/80 border border-dark-600 flex items-center justify-center mx-auto mb-2 text-accent-500 shadow-lg">
+                                        <i class="fas fa-bolt"></i>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="p-6 flex flex-col flex-grow">
+                                <time class="text-xs text-gray-500 font-medium mb-3 block">{{ item.time }}</time>
+                                
+                                <h3 class="text-lg font-bold text-white mb-3 leading-snug line-clamp-3 group-hover:text-accent-500 transition-colors h-[4.5em]">
+                                    {{ item.title }}
+                                </h3>
+                                
+                                <p class="text-sm text-gray-400 mb-6 line-clamp-3 flex-grow h-[4.5em]">
+                                    Reported via <span class="text-gray-300 italic">{{ item.source }}</span>.
+                                </p>
+
+                                <a href="{{ item.link }}" target="_blank" class="find-out-more inline-flex items-center text-accent-500 font-semibold text-sm group-hover:text-white transition-colors mt-auto">
+                                    <i class="far fa-check-circle text-lg mr-2"></i> 
+                                    Find out more
+                                </a>
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                        <div class="w-full bg-dark-800 border border-dark-700 rounded-lg p-12 text-center">
+                            <i class="fas fa-satellite-dish text-gray-600 text-4xl mb-4"></i>
+                            <h3 class="text-white font-bold text-lg">Scanning for news...</h3>
+                            <p class="text-gray-500 text-sm mt-2">No active outage reports found in the last 24 hours.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
         {% for service in services %}
             {% if service.status.name not in ['ok', 'maintenance'] %}
                 {% set ns.issues = ns.issues + 1 %}
@@ -112,7 +174,7 @@
         {% endfor %}
 
         {% if ns.issues > 0 %}
-            <div class="mb-8 w-full rounded border border-warn-border bg-dark-900 overflow-hidden">
+            <div class="mb-8 w-full rounded border border-warn-border bg-dark-900 overflow-hidden max-w-6xl mx-auto">
                 <button onclick="toggleIncidents()" class="w-full bg-warn-900 py-3 px-4 flex items-center justify-center text-warn-500 font-bold hover:bg-warn-900/80 transition-colors group border-b border-warn-border">
                     <i class="fas fa-caret-down mr-3 transform transition-transform -rotate-90" id="incidentChevron"></i>
                     <i class="fas fa-exclamation-triangle mr-2"></i>
@@ -137,80 +199,74 @@
                 </div>
             </div>
         {% else %}
-            <div class="mb-8 w-full rounded border border-success-border bg-success-900 p-4 flex items-center justify-center text-success-500 font-bold shadow-sm">
+            <div class="mb-8 w-full rounded border border-success-border bg-success-900 p-4 flex items-center justify-center text-success-500 font-bold shadow-sm max-w-6xl mx-auto">
                 <i class="fas fa-check-circle mr-2 text-lg"></i>
                 <span>All systems are operational. No incidents reported.</span>
             </div>
         {% endif %}
-
-        <div class="flex items-center justify-between w-full mb-2 px-1 pb-2 border-b border-dark-700/0">
-            <h2 class="text-white font-bold text-lg">{{ services|length }} Services</h2>
-            <div class="flex items-center gap-3">
-                <div class="custom-select-wrapper">
-                    <div class="custom-select-trigger" onclick="toggleSelect()">
-                        <span id="selectValue">Auto refresh off</span>
-                        <i class="fas fa-chevron-down text-xs text-gray-500 ml-2"></i>
+        <div class="max-w-6xl mx-auto">
+            <div class="flex items-center justify-between w-full mb-2 px-1 pb-2 border-b border-dark-700/0">
+                <h2 class="text-white font-bold text-lg">{{ services|length }} Monitored Services</h2>
+                <div class="flex items-center gap-3">
+                    <div class="custom-select-wrapper">
+                        <div class="custom-select-trigger" onclick="toggleSelect()">
+                            <span id="selectValue">Auto refresh off</span>
+                            <i class="fas fa-chevron-down text-xs text-gray-500 ml-2"></i>
+                        </div>
+                        <div class="custom-options">
+                            <div class="custom-option selected" data-value="0" onclick="setRefresh(0, 'Auto refresh off')">Auto refresh off</div>
+                            <div class="custom-option" data-value="120" onclick="setRefresh(120, 'Refresh: 2 min')">Refresh: 2 min</div>
+                            <div class="custom-option" data-value="900" onclick="setRefresh(900, 'Refresh: 15 min')">Refresh: 15 min</div>
+                        </div>
                     </div>
-                    <div class="custom-options">
-                        <div class="custom-option selected" data-value="0" onclick="setRefresh(0, 'Auto refresh off')">Auto refresh off</div>
-                        <div class="custom-option" data-value="120" onclick="setRefresh(120, 'Refresh: 2 min')">Refresh: 2 min</div>
-                        <div class="custom-option" data-value="900" onclick="setRefresh(900, 'Refresh: 15 min')">Refresh: 15 min</div>
-                    </div>
-                </div>
-                <div class="flex border border-dark-700 rounded overflow-hidden">
-                    <button class="px-2 py-1 bg-dark-800 text-green-500 border-r border-dark-700"><i class="fas fa-list"></i></button>
-                    <button class="px-2 py-1 bg-dark-900 text-gray-500 border-r border-dark-700"><i class="fas fa-pause"></i></button>
-                    <button class="px-2 py-1 bg-dark-900 text-gray-500"><i class="fas fa-grip-horizontal"></i></button>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-dark-900 border-t border-dark-700">
-            {% for service in services %}
-            <div onclick="openModal('{{ service.name }}')" class="relative flex items-center justify-between py-3 px-4 border-b border-dark-700 hover:bg-dark-800/50 transition-colors cursor-pointer group">
-                <div class="flex items-center gap-4">
-                    <i class="fas fa-caret-right text-gray-600 text-xs"></i>
-                    <div class="w-8 h-8 rounded bg-dark-800 border border-dark-700 flex items-center justify-center text-gray-400 group-hover:text-white transition-colors"><i class="{{ service.icon }}"></i></div>
-                    <div class="flex flex-col">
-                        <h3 class="font-bold text-gray-300 text-sm group-hover:text-blue-400 transition-colors">{{ service.name }}</h3>
-                        <span class="text-xs text-gray-500">{{ service.url }}</span>
+                    <div class="flex border border-dark-700 rounded overflow-hidden">
+                        <button class="px-2 py-1 bg-dark-800 text-green-500 border-r border-dark-700"><i class="fas fa-list"></i></button>
+                        <button class="px-2 py-1 bg-dark-900 text-gray-500 border-r border-dark-700"><i class="fas fa-pause"></i></button>
+                        <button class="px-2 py-1 bg-dark-900 text-gray-500"><i class="fas fa-grip-horizontal"></i></button>
                     </div>
                 </div>
-                <div class="flex-shrink-0">
-                    {% if service.status.name == 'ok' %}
-                        <span class="text-green-500 text-xs font-bold border border-green-900/50 bg-green-900/10 px-2 py-1 rounded"><i class="fas fa-check mr-1"></i> Operational</span>
-                    {% elif service.status.name == 'maintenance' %}
-                        <span class="text-blue-400 text-xs font-bold border border-blue-900/50 bg-blue-900/10 px-2 py-1 rounded"><i class="fas fa-tools mr-1"></i> Maint</span>
-                    {% elif service.status.name == 'minor' %}
-                        <span class="text-yellow-400 text-xs font-bold border border-yellow-900/50 bg-yellow-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-triangle mr-1"></i> Minor</span>
-                    {% elif service.status.name == 'major' %}
-                        <span class="text-orange-400 text-xs font-bold border border-orange-900/50 bg-orange-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-circle mr-1"></i> Major</span>
-                    {% elif service.status.name == 'critical' %}
-                        <span class="text-red-400 text-xs font-bold border border-red-900/50 bg-red-900/10 px-2 py-1 rounded"><i class="fas fa-times-circle mr-1"></i> Critical</span>
-                    {% elif service.status.name == 'unavailable' %}
-                        <span class="text-gray-400 text-xs font-bold border border-gray-700 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-ban mr-1"></i> Unavailable</span>
-                    {% endif %}
+            </div>
+
+            <div class="bg-dark-900 border-t border-dark-700 mb-12 rounded-lg overflow-hidden">
+                {% for service in services %}
+                <div onclick="openModal('{{ service.name }}')" class="relative flex items-center justify-between py-4 px-6 border-b border-dark-700 hover:bg-dark-800/50 transition-colors cursor-pointer group last:border-0">
+                    <div class="flex items-center gap-4">
+                        <i class="fas fa-caret-right text-gray-600 text-xs"></i>
+                        <div class="w-10 h-10 rounded bg-dark-800 border border-dark-700 flex items-center justify-center text-gray-400 group-hover:text-white transition-colors text-lg"><i class="{{ service.icon }}"></i></div>
+                        <div class="flex flex-col">
+                            <h3 class="font-bold text-gray-300 text-sm group-hover:text-accent-500 transition-colors">{{ service.name }}</h3>
+                            <span class="text-xs text-gray-500">{{ service.url }}</span>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0">
+                        {% if service.status.name == 'ok' %}
+                            <span class="text-green-500 text-xs font-bold border border-green-900/50 bg-green-900/10 px-2 py-1 rounded"><i class="fas fa-check mr-1"></i> Operational</span>
+                        {% elif service.status.name == 'maintenance' %}
+                            <span class="text-blue-400 text-xs font-bold border border-blue-900/50 bg-blue-900/10 px-2 py-1 rounded"><i class="fas fa-tools mr-1"></i> Maint</span>
+                        {% elif service.status.name == 'minor' %}
+                            <span class="text-yellow-400 text-xs font-bold border border-yellow-900/50 bg-yellow-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-triangle mr-1"></i> Minor</span>
+                        {% elif service.status.name == 'major' %}
+                            <span class="text-orange-400 text-xs font-bold border border-orange-900/50 bg-orange-900/10 px-2 py-1 rounded"><i class="fas fa-exclamation-circle mr-1"></i> Major</span>
+                        {% elif service.status.name == 'critical' %}
+                            <span class="text-red-400 text-xs font-bold border border-red-900/50 bg-red-900/10 px-2 py-1 rounded"><i class="fas fa-times-circle mr-1"></i> Critical</span>
+                        {% elif service.status.name == 'unavailable' %}
+                            <span class="text-gray-400 text-xs font-bold border border-gray-700 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-ban mr-1"></i> Unavailable</span>
+                        {% endif %}
+                    </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
 
-        <div class="mt-8 flex flex-col items-center gap-4">
-            <div class="flex gap-4">
-                <a href="/" class="inline-flex items-center gap-2 px-6 py-2 bg-dark-800 border border-dark-700 text-gray-400 rounded-md shadow-sm hover:bg-dark-700 hover:text-white text-sm font-medium transition"><i class="fas fa-sync-alt"></i> Refresh</a>
-                
-                <!-- Regular Excel Report -->
-                <a href="/download_report" class="inline-flex items-center gap-2 px-6 py-2 bg-green-600 border border-green-700 text-white rounded-md shadow-sm hover:bg-green-700 text-sm font-medium transition"><i class="fas fa-file-excel"></i> Excel Report</a>
-                
-                <!-- New Daily Report Button -->
-                <a href="/download_daily_report" class="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 border border-blue-700 text-white rounded-md shadow-sm hover:bg-blue-700 text-sm font-medium transition"><i class="fas fa-calendar-day"></i> Daily Report</a>
-
-                
-                <button onclick="copyReportDraft()" id="copyBtn" class="inline-flex items-center gap-2 px-6 py-2 bg-gray-700 border border-gray-600 text-white rounded-md shadow-sm hover:bg-gray-600 text-sm font-medium transition"><i class="fas fa-copy"></i> Copy Draft</button>
-
-                <a href="/download_ppt_snapshot" class="inline-flex items-center gap-2 px-6 py-2 bg-orange-600 border border-orange-700 text-white rounded-md shadow-sm hover:bg-orange-700 text-sm font-medium transition"><i class="fas fa-file-powerpoint"></i> PPT Snapshot</a>
+            <div class="flex flex-col items-center gap-4 mb-20">
+                <div class="flex flex-wrap justify-center gap-4">
+                    <a href="/" class="inline-flex items-center gap-2 px-6 py-2 bg-dark-800 border border-dark-700 text-gray-400 rounded-md shadow-sm hover:bg-dark-700 hover:text-white text-sm font-medium transition"><i class="fas fa-sync-alt"></i> Refresh</a>
+                    <a href="/download_report" class="inline-flex items-center gap-2 px-6 py-2 bg-green-600 border border-green-700 text-white rounded-md shadow-sm hover:bg-green-700 text-sm font-medium transition"><i class="fas fa-file-excel"></i> Excel Report</a>
+                    <a href="/download_daily_report" class="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 border border-blue-700 text-white rounded-md shadow-sm hover:bg-blue-700 text-sm font-medium transition"><i class="fas fa-calendar-day"></i> Daily Report</a>
+                    <button onclick="copyReportDraft()" id="copyBtn" class="inline-flex items-center gap-2 px-6 py-2 bg-gray-700 border border-gray-600 text-white rounded-md shadow-sm hover:bg-gray-600 text-sm font-medium transition"><i class="fas fa-copy"></i> Copy Draft</button>
+                    <a href="/download_ppt_snapshot" class="inline-flex items-center gap-2 px-6 py-2 bg-orange-600 border border-orange-700 text-white rounded-md shadow-sm hover:bg-orange-700 text-sm font-medium transition"><i class="fas fa-file-powerpoint"></i> PPT Snapshot</a>
+                </div>
+                <div id="refreshStatus" class="text-xs text-gray-600">Auto-refresh disabled</div>
             </div>
-            <div id="refreshStatus" class="text-xs text-gray-600">Auto-refresh disabled</div>
         </div>
     </div>
 
@@ -220,93 +276,22 @@
             <iframe id="modalIframe" src="" class="w-full h-full border-0" title="Service Details"></iframe>
         </div>
     </div>
-    <!-- Google News Dynamic RSS Info Section -->
-    <div class="w-full max-w-4xl mx-auto mt-10 mb-4 p-4 rounded-md bg-dark-800 border border-dark-700">
-        <h3 class="text-white font-bold text-md mb-2 flex items-center gap-2">
-            <i class="fas fa-bolt text-yellow-400"></i>
-            Google News Dynamic RSS (Live Outage Signals)
-        </h3>
-
-        <p class="text-gray-400 text-sm leading-relaxed">
-            Instead of relying only on official status pages, this dashboard also scans 
-            <span class="text-blue-400 font-semibold">Google News RSS</span> for fresh articles like 
-            “AWS outage”, “GitHub down”, or “Cloudflare issues”.  
-            Tech media (TechCrunch, The Verge, BleepingComputer) often report outages 
-            <span class="font-semibold text-green-400">minutes before</span> official pages update.  
-            This feed automatically refreshes every few minutes.  
-            <span class="text-gray-500 italic">Cost: Free.</span>
-        </p>
-    </div>
-    <!-- Google News Live Carousel -->
-    <div class="w-full max-w-4xl mx-auto mt-4">
-        <div id="newsTicker"
-            class="relative w-full bg-dark-800 border border-dark-700 rounded-lg overflow-hidden">
-
-            <!-- Slides -->
-            <div id="newsSlides" class="whitespace-nowrap transition-transform duration-500">
-                {% if news %}
-                    {% for item in news %}
-                    <div class="inline-block w-full px-4 py-4 align-middle">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="text-xs text-gray-400 mb-1">
-                                    <span class="text-blue-400 font-semibold">{{ item.service }}</span> • 
-                                    {{ item.time }} • 
-                                    <span class="italic">{{ item.source }}</span>
-                                </div>
-
-                                <a href="{{ item.link }}" target="_blank"
-                                class="text-gray-200 text-sm font-semibold hover:text-blue-400 transition block text-left">
-                                    {{ item.title }}
-                                    <i class="fas fa-external-link-alt ml-1 text-xs opacity-50"></i>
-                                </a>
-                            </div>
-                            <i class="fas fa-newspaper text-gray-500 opacity-30 text-xl"></i>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div class="inline-block w-full px-4 py-4 text-center text-gray-400">
-                        <i class="fas fa-spinner fa-spin mr-2"></i> Initializing News Feed...
-                    </div>
-                {% endif %}
-            </div>
-
-            <!-- Controls -->
-            <button onclick="prevNews()" class="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600 transition">
-                <i class="fas fa-chevron-left"></i>
-            </button>
-
-            <button onclick="nextNews()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600 transition">
-                <i class="fas fa-chevron-right"></i>
-            </button>
-        </div>
-    </div>
-
 
     <script>
-        let currentSlide = 0;
-        let totalSlides = {{ news|length if news else 1 }};
-        const slideWidth = 100; // percent
-
-        function updateSlide() {
-            const slides = document.getElementById('newsSlides');
-            slides.style.transform = `translateX(-${currentSlide * slideWidth}%)`;
+        // HORIZONTAL SCROLL LOGIC
+        function scrollNews(direction) {
+            const container = document.getElementById('newsContainer');
+            const cardWidth = 320; // Approx card width + gap
+            const scrollAmount = cardWidth * 2; // Scroll 2 cards at a time
+            
+            if (direction === 1) {
+                container.scrollLeft += scrollAmount;
+            } else {
+                container.scrollLeft -= scrollAmount;
+            }
         }
 
-        function nextNews() {
-            currentSlide = (currentSlide + 1) % totalSlides;
-            updateSlide();
-        }
-
-        function prevNews() {
-            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
-            updateSlide();
-        }
-
-        // Auto-slide every 5 seconds
-        setInterval(nextNews, 5000);
-
+        // INCIDENT TOGGLE
         function toggleIncidents() {
             const dropdown = document.getElementById('incidentDropdown');
             const chevron = document.getElementById('incidentChevron');
@@ -318,6 +303,8 @@
                 chevron.classList.add('rotate-0');
             }
         }
+
+        // MODAL LOGIC
         const modal = document.getElementById('serviceModal');
         const iframe = document.getElementById('modalIframe');
         function openModal(serviceName) {
@@ -332,6 +319,8 @@
         }
         modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('active')) closeModal(); });
+
+        // COPY FUNCTION
         async function copyReportDraft() {
             const btn = document.getElementById('copyBtn');
             const originalHTML = btn.innerHTML;
@@ -357,6 +346,8 @@
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
+
+        // REFRESH LOGIC
         let refreshTimer;
         function toggleSelect() { document.querySelector('.custom-options').classList.toggle('open'); }
         function setRefresh(seconds, label) {
