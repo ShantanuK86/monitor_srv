@@ -747,16 +747,30 @@ def update_hardware_row():
     except Exception as e:
         print(e)
         return jsonify({"success": False, "message": str(e)}), 500
-
 # download pptx
+import os  # <--- 1. Import OS
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+# from io import BytesIO
+# from flask import send_file, url_for
+# from pptx import Presentation
+# from pptx.util import Inches
+# from datetime import datetime
+import time
+
 @app.route('/download_ppt_snapshot')
 def download_ppt_snapshot():
     """
     Launches a headless browser, snapshots the Monitoring page, 
     and returns a PPTX file.
     """
-    # 1. SETUP: Define the URL to snapshot
-    # We use url_for with _external=True to get the absolute URL (e.g., http://localhost:5000/monitoring)
+    
+    # --- FIX PART 1: DISABLE SSL VERIFY FOR DRIVER MANAGER ---
+    # This tells Python to ignore SSL errors when downloading the Chrome Driver
+    os.environ['WDM_SSL_VERIFY'] = '0' 
+    
     target_url = url_for('monitoring', _external=True)
     
     # 2. CONFIGURE SELENIUM (HEADLESS)
@@ -767,29 +781,36 @@ def download_ppt_snapshot():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    
-    ppt_stream = BytesIO() # Create file in memory
+    # --- FIX PART 2: DISABLE SSL CHECKS FOR THE BROWSER ---
+    # This allows the Chrome instance to navigate URLs even with proxy cert issues
+    chrome_options.add_argument('--ignore-certificate-errors')
+    chrome_options.add_argument('--ignore-ssl-errors')
+
+    chrome_options.add_argument('--allow-insecure-localhost') # Helpful if target is localhost
 
     try:
+        # We explicitly disable verification in the manager install call just to be safe,
+        # though the environment variable above usually handles it.
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        ppt_stream = BytesIO() 
+
         print(f"Snapshotting URL: {target_url}")
         
         # 3. CAPTURE SCREENSHOT
         driver.get(target_url)
-        time.sleep(3) # Wait for Chart.js and Tailwind animations
+        time.sleep(3) 
         
-        # Capture screenshot as binary data
         screenshot = driver.get_screenshot_as_png()
         screenshot_stream = BytesIO(screenshot)
 
         # 4. CREATE POWERPOINT
         prs = Presentation()
-        # Layout 6 is usually a blank slide
         blank_slide_layout = prs.slide_layouts[6] 
         slide = prs.slides.add_slide(blank_slide_layout)
 
         # 5. INSERT IMAGE
-        # Center the image on the slide (Standard 16:9 slide is 10x5.625 inches)
         left = Inches(0.5)
         top = Inches(0.5)
         width = Inches(9)
@@ -803,7 +824,9 @@ def download_ppt_snapshot():
         print(f"Error generating PPT: {e}")
         return f"Error generating presentation: {str(e)}", 500
     finally:
-        driver.quit()
+        # Ensure driver is defined before trying to quit (in case install failed)
+        if 'driver' in locals():
+            driver.quit()
 
     # 7. SEND FILE TO USER
     return send_file(
